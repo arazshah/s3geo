@@ -1,0 +1,324 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import Any
+
+
+def _planning_outputs_summary(
+    outputs: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """
+    Build a compact summary suitable for audit and persisted output metadata.
+
+    The full GeoJSON/artifact payload remains in ``outputs``.  This summary is
+    deliberately lightweight so audit_record.json and outputs_summary.json do
+    not duplicate large spatial payloads.
+    """
+    summary: dict[str, dict[str, Any]] = {}
+
+    for layer in outputs.get("vectors", []) or []:
+        if not isinstance(layer, dict):
+            continue
+
+        name = str(layer.get("id") or layer.get("name") or "vector")
+        layer_summary = layer.get("summary")
+        feature_count = (
+            layer_summary.get("feature_count")
+            if isinstance(layer_summary, dict)
+            else None
+        )
+
+        if not isinstance(feature_count, int):
+            geojson = layer.get("geojson")
+            if isinstance(geojson, dict) and isinstance(geojson.get("features"), list):
+                feature_count = len(geojson["features"])
+
+        summary[name] = {
+            "kind": "vector",
+            "format": layer.get("format") or "geojson",
+            "feature_count": feature_count,
+        }
+
+    for raster in outputs.get("rasters", []) or []:
+        if not isinstance(raster, dict):
+            continue
+
+        name = str(raster.get("id") or raster.get("name") or "raster")
+        summary.setdefault(
+            name,
+            {
+                "kind": "raster",
+                "format": raster.get("format") or "raster",
+            },
+        )
+
+    for table in outputs.get("tables", []) or []:
+        if not isinstance(table, dict):
+            continue
+
+        name = str(table.get("id") or table.get("name") or "table")
+        rows = table.get("rows")
+
+        if not isinstance(rows, list):
+            data = table.get("data")
+            rows = data.get("rows") if isinstance(data, dict) else None
+
+        item: dict[str, Any] = {"kind": "table"}
+        if isinstance(rows, list):
+            item["row_count"] = len(rows)
+
+        summary.setdefault(name, item)
+
+    for report in outputs.get("reports", []) or []:
+        if not isinstance(report, dict):
+            continue
+
+        name = str(report.get("id") or report.get("name") or "report")
+        summary.setdefault(name, {"kind": "report"})
+
+    for file_item in outputs.get("files", []) or []:
+        if not isinstance(file_item, dict):
+            continue
+
+        name = str(file_item.get("id") or file_item.get("name") or "file")
+        summary.setdefault(
+            name,
+            {
+                "kind": "file",
+                "format": file_item.get("format"),
+            },
+        )
+
+    return summary
+
+
+def _planning_audit_record(
+    *,
+    request_id: str,
+    success: bool,
+    planning_error: Any,
+    steps: list[dict[str, Any]],
+    outputs_summary: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Create the audit contract for the QuerySpec-planning execution path."""
+    return {
+        "request_id": request_id,
+        "status": "success" if success else "failed",
+        "query_hash": None,
+        "plan_summary": {
+            "step_count": len(steps),
+            "nodes": [
+                {
+                    "node_id": step.get("step"),
+                    "capability_name": step.get("label"),
+                    "status": step.get("status"),
+                }
+                for step in steps
+                if isinstance(step, dict)
+            ],
+        },
+        "trace": steps,
+        "outputs_summary": outputs_summary,
+        "warnings": (
+            []
+            if success
+            else [str(planning_error or "Planning execution failed.")]
+        ),
+    }
+
+
+def build_query_spec_planning_response(
+    *,
+    planning_result: Any,
+    final_metadata: dict[str, Any],
+    final_request_id: str,
+    query_spec: Any,
+    kernel_execution_enabled: bool,
+    planning_outputs_to_response_payload: Callable[[Any], tuple[list[dict[str, Any]], dict[str, Any], Any]],
+    planning_trace_to_steps: Callable[[list[Any]], list[dict[str, Any]]],
+    query_spec_to_dict_func: Callable[[Any], dict[str, Any]],
+    redact_sensitive_json: Callable[[Any], Any],
+) -> tuple[dict[str, Any], dict[str, Any], bool, Any, Any]:
+    from orchestrator.planning.kernel_execution_bridge import (
+        compare_kernel_execution_to_planning_outputs,
+        kernel_execution_to_summary,
+    )
+    from orchestrator.planning.kernel_plan_adapter import kernel_plan_to_summary
+
+    layers, outputs, primary_report = planning_outputs_to_response_payload(planning_result)
+
+    kernel_plan_summary = kernel_plan_to_summary(
+        getattr(planning_result, "kernel_plan", None)
+    )
+    kernel_execution_summary = kernel_execution_to_summary(
+        getattr(planning_result, "kernel_execution", None)
+    )
+    kernel_execution_parity = compare_kernel_execution_to_planning_outputs(
+        planning_result
+    )
+
+    steps = planning_trace_to_steps(
+        getattr(planning_result, "trace", []) or []
+    )
+
+    success = bool(getattr(planning_result, "success", False))
+    planning_error = getattr(planning_result, "error", None)
+    planning_structured_error = getattr(
+        planning_result,
+        "structured_error",
+        None,
+    )
+
+    outputs_summary = _planning_outputs_summary(outputs)
+    audit_record = _planning_audit_record(
+        request_id=final_request_id,
+        success=success,
+        planning_error=planning_error,
+        steps=steps,
+        outputs_summary=outputs_summary,
+    )
+
+    # Legacy-compatible location consumed by OutputStorage.save_request_record.
+    outputs["summary"] = outputs_summary
+
+    feature_counts = [
+        int(item.get("feature_count"))
+        for item in outputs_summary.values()
+        if (
+            isinstance(item, dict)
+            and isinstance(item.get("feature_count"), int)
+        )
+    ]
+    total_feature_count = sum(feature_counts)
+
+    if success:
+        if total_feature_count:
+            answer = (
+                f"تحلیل با موفقیت انجام شد و {total_feature_count} عارضه "
+                "استخراج شد."
+            )
+        else:
+            answer = "تحلیل با موفقیت انجام شد."
+    else:
+        answer = planning_error or "اجرای تحلیل برنامه‌ریزی‌شده ناموفق بود."
+
+    if success and outputs["files"]:
+        answer += " فایل خروجی آماده است."
+
+    if success and primary_report is not None:
+        answer += " گزارش آماده است."
+
+    planning_metadata = {
+        **final_metadata,
+        "query_spec_planning_enabled": True,
+        "planning_attempted": True,
+        "planner_type": "deterministic_query_spec",
+        "execution_mode": (
+            "query_spec_planning_kernel_execution"
+            if kernel_execution_enabled
+            else "query_spec_planning"
+        ),
+        "kernel_execution_enabled": kernel_execution_enabled,
+        "query_spec": redact_sensitive_json(query_spec_to_dict_func(query_spec)),
+        "outputs_summary": outputs_summary,
+        "audit_record": audit_record,
+        "planning_summary": {
+            "success": success,
+            "error": planning_error,
+            "structured_error": planning_structured_error,
+            "output_nodes": sorted(
+                (getattr(planning_result, "output_nodes", None) or {}).keys()
+            ),
+            "kernel_execution_enabled": kernel_execution_enabled,
+            "kernel_plan": kernel_plan_summary,
+            "kernel_execution": kernel_execution_summary,
+            "kernel_execution_success": (
+                None
+                if kernel_execution_summary is None
+                else bool(kernel_execution_summary.get("success"))
+            ),
+            "kernel_execution_parity": kernel_execution_parity,
+        },
+    }
+
+    documents = (
+        outputs.get("documents", [])
+        if isinstance(outputs, dict)
+        else []
+    )
+    files = (
+        outputs.get("files", [])
+        if isinstance(outputs, dict)
+        else []
+    )
+    reports = (
+        outputs.get("reports", [])
+        if isinstance(outputs, dict)
+        else []
+    )
+
+    response_status = (
+        "succeeded"
+        if success and kernel_execution_enabled
+        else ("success" if success else "failed")
+    )
+
+    production_response = {
+        "ok": success,
+        "status": response_status,
+        "request_id": final_request_id,
+        "query_hash": None,
+        "answer": answer,
+        "message": answer,
+        "structured_error": planning_structured_error,
+        "outputs": outputs,
+        "outputs_summary": outputs_summary,
+        "audit_record": audit_record,
+        "layers": layers,
+        "map": {
+            "layers": layers,
+        },
+        "documents": documents,
+        "files": files,
+        "reports": reports,
+        "artifacts": outputs.get("artifacts", []) if isinstance(outputs, dict) else [],
+        "kernel_plan": kernel_plan_summary,
+        "kernel_execution": kernel_execution_summary,
+        "trace": steps,
+        "steps": steps,
+        "confidence": {
+            "level": "high" if success else "low",
+            "score": 1.0 if success else 0.0,
+            "llm_action": "query_spec_planning",
+            "is_ambiguous": False,
+            "competitive_gap": None,
+        },
+        "audit_ref": {
+            "request_id": final_request_id,
+            "query_hash": None,
+            "status": "success" if success else "failed",
+            "plan_steps": len(steps),
+        },
+        "warnings": [] if success else [planning_error or "Planning execution failed."],
+        "next_actions": (
+            []
+            if success
+            else [
+                "ورودی‌های لازم تحلیل را بررسی و دوباره ارسال کنید.",
+                "لایه raster/تصویر ماهواره‌ای موردنیاز را به عنوان ورودی ارائه کنید.",
+                "پس از تکمیل ورودی‌ها، درخواست تحلیل را دوباره اجرا کنید.",
+            ]
+        ),
+        "metadata": planning_metadata,
+    }
+
+    if primary_report is not None:
+        production_response["report"] = primary_report
+
+    return (
+        production_response,
+        planning_metadata,
+        success,
+        planning_error,
+        planning_structured_error,
+    )

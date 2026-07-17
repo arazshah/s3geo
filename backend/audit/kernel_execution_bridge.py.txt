@@ -1,0 +1,181 @@
+        initial_inputs = context.metadata.get("initial_inputs", {})
+        external_input_map = step.metadata.get("external_input_map", {})
+        if isinstance(initial_inputs, dict) and isinstance(external_input_map, dict):
+            for param_name, input_name in external_input_map.items():
+                if input_name not in initial_inputs:
+                    raise KeyError(
+                        f"Initial input {input_name!r} required by step "
+                        f"{step.id!r} parameter {param_name!r} was not provided."
+                    )
+                kwargs[str(param_name)] = initial_inputs[input_name]
+
+        # 4. Dependency artifacts resolved by kernel PlanExecutor.
+        for param_name, artifact in inputs.items():
+            kwargs[param_name] = artifact_to_value(artifact)
+
+        output = capability_fn(**kwargs)
+        if inspect.isawaitable(output):
+            output = await output
+
+        return value_to_execution_artifact(
+            output,
+            step=step,
+            produced_by=self.name,
+        )
+
+
+def make_kernel_container_for_capabilities(
+    capability_resolver: CapabilityResolver,
+) -> KernelAppContainer:
+    """
+    Create a minimal KernelAppContainer with one bridge StepHandler.
+    """
+    container = KernelAppContainer()
+    container.step_handlers.register_handler(
+        CapabilityStepHandler(capability_resolver),
+        replace=True,
+    )
+    return container
+
+
+async def execute_kernel_plan_with_capabilities(
+    query_plan: QueryPlan,
+    *,
+    capability_resolver: CapabilityResolver,
+    initial_inputs: dict[str, Any] | None = None,
+    context: ExecutionContext | None = None,
+    raise_on_error: bool = False,
+) -> KernelExecutionBridgeResult:
+    """
+    Execute a kernel QueryPlan using existing smart_spatial_system capabilities.
+
+    This is the async bridge around geochat_kernel.runtime.PlanExecutor.
+    """
+    initial_inputs = initial_inputs or {}
+
+    context = context or ExecutionContext(
+        raw_text=str(query_plan.metadata.get("raw_query") or ""),
+        language=str(query_plan.metadata.get("language") or "unknown"),
+        metadata={},
+    )
+    context.metadata.setdefault("initial_inputs", initial_inputs)
+    context.metadata.setdefault("kernel_plan_id", query_plan.id)
+    context.metadata.setdefault("query_ir_id", query_plan.query_ir_id)
+    context.metadata.setdefault("bridge", "smart_spatial_system.kernel_execution_bridge")
+
+    missing_external_inputs = _find_missing_external_inputs(
+        query_plan,
+        initial_inputs,
+    )
+    if missing_external_inputs:
+        error = _format_missing_external_inputs(missing_external_inputs)
+        context.metadata["missing_external_inputs"] = missing_external_inputs
+
+        if raise_on_error:
+            raise KeyError(error)
+
+        return KernelExecutionBridgeResult(
+            success=False,
+            artifacts={},
+            output_artifacts={},
+            outputs={},
+            output_nodes={},
+            context=context,
+            error=error,
+            structured_error=_missing_external_inputs_structured_error(
+                missing_external_inputs,
+                message=error,
+            ),
+        )
+
+    container = make_kernel_container_for_capabilities(capability_resolver)
+    executor = PlanExecutor(container)
+
+    try:
+        artifacts = await executor.execute(query_plan, context)
+    except Exception as exc:
+        if raise_on_error:
+            raise
+        return KernelExecutionBridgeResult(
+            success=False,
+            artifacts={},
+            output_artifacts={},
+            outputs={},
+            output_nodes={},
+            context=context,
+            error=str(exc),
+            structured_error=_kernel_exception_structured_error(exc),
+        )
+
+    output_node_ids = [
+        str(node_id)
+        for node_id in query_plan.metadata.get("output_nodes", [])
+    ]
+
+    output_artifacts = {
+        node_id: artifacts[node_id]
+        for node_id in output_node_ids
+        if node_id in artifacts
+    }
+
+    outputs = {
+        step_id: artifact_to_value(artifact)
+        for step_id, artifact in artifacts.items()
+    }
+
+    output_nodes = {
+        step_id: artifact_to_value(artifact)
+        for step_id, artifact in output_artifacts.items()
+    }
+
+    return KernelExecutionBridgeResult(
+        success=True,
+        artifacts=artifacts,
+        output_artifacts=output_artifacts,
+        outputs=outputs,
+        output_nodes=output_nodes,
+        context=context,
+        error=None,
+        structured_error=None,
+    )
+
+
+def execute_kernel_plan_with_capabilities_sync(
+    query_plan: QueryPlan,
+    *,
+    capability_resolver: CapabilityResolver,
+    initial_inputs: dict[str, Any] | None = None,
+    context: ExecutionContext | None = None,
+    raise_on_error: bool = False,
+) -> KernelExecutionBridgeResult:
+    """
+    Synchronous convenience wrapper for scripts/tests.
+
+    Do not call this from an already-running event loop.
+    """
+    return asyncio.run(
+        execute_kernel_plan_with_capabilities(
+            query_plan,
+            capability_resolver=capability_resolver,
+            initial_inputs=initial_inputs,
+            context=context,
+            raise_on_error=raise_on_error,
+        )
+    )
+
+
+def _artifact_has_live(artifact: ExecutionArtifact) -> bool:
+    try:
+        return bool(getattr(artifact, "has_live", False))
+    except Exception:
+        pass
+
+    try:
+        return artifact.get_live() is not None
+    except Exception:
+        return False
+
+
+def execution_artifact_to_summary(
+    artifact: ExecutionArtifact,
+) -> dict[str, Any]:

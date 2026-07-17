@@ -1,0 +1,151 @@
+        query_spec: Any,
+        resolved_inputs: dict[str, Any],
+    ) -> None:
+        return enrich_query_database_params_from_inputs(
+            query_spec=query_spec,
+            resolved_inputs=resolved_inputs,
+        )
+
+
+
+
+    def _is_vector_only_planning_request(
+        self,
+        *,
+        final_metadata: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        meta = metadata or {}
+        avoid = set(final_metadata.get("frontend_avoid_capabilities") or meta.get("frontend_avoid_capabilities") or [])
+        llm_intent = final_metadata.get("llm_intent") or meta.get("llm_intent") or {}
+        required_inputs = llm_intent.get("required_inputs") if isinstance(llm_intent, dict) else {}
+
+        frontend_requires_raster = final_metadata.get(
+            "frontend_requires_raster",
+            meta.get("frontend_requires_raster"),
+        )
+        vector_only_hint = final_metadata.get(
+            "frontend_selected_sources_look_vector_only",
+            meta.get("frontend_selected_sources_look_vector_only"),
+        )
+        preferred_mode = str(
+            final_metadata.get(
+                "frontend_preferred_execution_mode",
+                meta.get("frontend_preferred_execution_mode", ""),
+            )
+            or ""
+        ).lower()
+
+        raster_forbidden_by_llm = (
+            isinstance(required_inputs, dict)
+            and required_inputs.get("raster") is False
+            and required_inputs.get("vector") is True
+        )
+
+        raster_caps_avoided = bool(
+            {
+                "calculate_spectral_index",
+                "threshold_raster",
+                "raster_to_vector",
+            }
+            & avoid
+        )
+
+        return bool(
+            frontend_requires_raster is False
+            or raster_forbidden_by_llm
+            or raster_caps_avoided
+            or preferred_mode == "vector_only_if_possible"
+            or vector_only_hint is True
+        )
+
+    def _planning_failure_response(
+        self,
+        *,
+        query: str,
+        final_request_id: str,
+        final_metadata: dict[str, Any],
+        exc: Exception,
+        planning_structured_error: dict[str, Any],
+    ) -> dict[str, Any]:
+        message = str(exc) or "Planning failed."
+
+        structured_error = dict(planning_structured_error or {})
+        details = dict(structured_error.get("details") or {})
+
+        if "missing input role" in message.lower() or "missing input role(s)" in message.lower():
+            structured_error["code"] = "planning.missing_input_roles"
+            structured_error["category"] = "planning_error"
+            structured_error["message"] = message
+            details.setdefault("operation", "spatial_nearest")
+            details.setdefault("missing_roles", ["source", "target"])
+
+        structured_error.setdefault("code", "planning.failed")
+        structured_error.setdefault("category", "planning_error")
+        structured_error.setdefault("retryable", False)
+        structured_error["details"] = details
+        structured_error.setdefault("source", "orchestrator_service")
+
+        final_metadata["query_spec_planning_enabled"] = True
+        final_metadata["planning_attempted"] = True
+        final_metadata["planning_error"] = message
+        final_metadata["planning_structured_error"] = structured_error
+        final_metadata["structured_error"] = structured_error
+        final_metadata["service_structured_error"] = structured_error
+
+        answer = f"در برنامه‌ریزی درخواست خطا رخ داد: {message}"
+
+        return {
+            "status": "failed",
+            "request_id": final_request_id,
+            "query": query,
+            "ok": False,
+            "answer": answer,
+            "message": answer,
+            "summary": answer,
+            "outputs": {},
+            "layers": [],
+            "map_layers": [],
+            "map": {"layers": []},
+            "documents": [],
+            "files": [],
+            "reports": [],
+            "artifacts": [],
+            "warnings": [
+                "برنامه‌ریزی درخواست ناموفق بود.",
+                f"جزئیات خطا: {message}",
+            ],
+            "errors": [structured_error],
+            "next_actions": [
+                "نقش داده‌های ورودی را مشخص کنید.",
+                "برای nearest/proximity نقش‌های source و target الزامی هستند.",
+                "ورودی‌های انتخاب‌شده و metadata را بررسی کنید.",
+            ],
+            "metadata": final_metadata,
+            "confidence": {
+                "level": None,
+                "score": None,
+                "llm_action": "query_spec_planning",
+                "is_ambiguous": False,
+                "competitive_gap": None,
+            },
+            "audit_ref": {
+                "request_id": None,
+                "query_hash": None,
+                "status": "failed",
+                "plan_steps": None,
+            },
+            "trace": [],
+            "steps": [],
+            "structured_error": structured_error,
+        }
+
+
+
+    def _try_handle_query_with_planning(
+            self,
+            *,
+            query: str,
+            resolved_inputs: dict[str, Any],
+            final_request_id: str,
+            final_metadata: dict[str, Any],

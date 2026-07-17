@@ -1,0 +1,44 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: deploy/backend.Dockerfile
+    container_name: s3geo-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SMART_SPATIAL_RUNTIME_DIR: /app/var
+      GEOCHAT_PLUGIN_CONFIG_DIR: /app/config/plugins
+    volumes:
+      - smart_spatial_runtime:/app/var
+    expose:
+      - "8000"
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: deploy/frontend.Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
+        VITE_API_RUN_PATH: ${VITE_API_RUN_PATH:-/api/v1/query}
+        VITE_API_PREVIEW_PATH: ${VITE_API_PREVIEW_PATH:-/api/v1/planner/intent}
+    container_name: s3geo-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+
+volumes:
+  smart_spatial_runtime:
+    name: s3geo-smart-spatial-runtime

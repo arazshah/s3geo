@@ -1,0 +1,26 @@
+smart_spatial_system/application/services/query_execution_service.py:659:            details.setdefault("operation", "spatial_nearest")
+smart_spatial_system/application/services/query_execution/planning_context.py:253:            "spatial_nearest": {
+smart_spatial_system/application/services/query_execution/planning_context.py:254:                "contract": "spatial_nearest.vector.v1",
+smart_spatial_system/application/services/query_execution/planning_context.py:264:                    "op": "spatial_nearest",
+orchestrator/llm_intent_planner.py:144:- find_nearest_neighbors: find nearest features.
+orchestrator/planning/op_catalog.py:14:    - spatial_nearest
+orchestrator/planning/op_catalog.py:22:    - find_nearest_neighbors
+orchestrator/planning/op_catalog.py:227:    "spatial_nearest": OpDescriptor(
+orchestrator/planning/op_catalog.py:228:        op_name="spatial_nearest",
+orchestrator/planning/op_catalog.py:229:        capability_name="find_nearest_neighbors",
+orchestrator/planning/op_catalog.py:256:        capability_name="find_nearest_neighbors",
+orchestrator/planning/op_catalog.py:268:            "Alias of spatial_nearest. Prefer spatial_nearest in new plans. "
+orchestrator/planning/op_catalog.py:275:        capability_name="find_nearest_neighbors",
+orchestrator/planning/op_catalog.py:316:            "target features. For 'nearest target per source', spatial_nearest is "
+orchestrator/planning/semantic_planning_context.py:349:        ops.append("spatial_nearest")
+orchestrator/planning/semantic_planning_context.py:379:                op="spatial_nearest",
+orchestrator/planning/semantic_planning_context.py:383:                    "first, then run spatial_nearest with k=1."
+orchestrator/planning/semantic_planning_context.py:399:                    "is spatial_nearest, rank by _nearest_distance ascending."
+orchestrator/planning/dag.py:26:            find_nearest_neighbors
+orchestrator/planning/llm_spec_generator.py:439:        spatial_nearest inputs={source: metro_station, target: shopping_center}
+orchestrator/planning/llm_spec_generator.py:444:      spatial_nearest ...
+orchestrator/planning/llm_spec_generator.py:1051:  op="spatial_nearest"
+orchestrator/planning/llm_spec_generator.py:1053:- For top N nearest results after spatial_nearest, use:
+plugins/nearest_neighbor.py:14:    - find_nearest_neighbors
+plugins/nearest_neighbor.py:329:    name="find_nearest_neighbors",
+plugins/nearest_neighbor.py:373:def find_nearest_neighbors(

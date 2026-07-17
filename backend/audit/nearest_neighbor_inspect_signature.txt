@@ -1,0 +1,1 @@
+(source_features: 'Any', target_features: 'Any', k: 'int | None' = None, max_distance: 'float | None' = None, engine: 'str | None' = None, precision: 'int | None' = None, drop_unmatched: 'bool | None' = None, include_target_geometry: 'bool | None' = None, source_crs: 'str | None' = None, metadata: 'dict[str, Any] | None' = None) -> 'VectorOut'

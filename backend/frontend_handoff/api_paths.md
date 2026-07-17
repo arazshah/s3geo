@@ -1,0 +1,89 @@
+# Smart Spatial System API Paths
+
+Title: Smart Spatial System API
+Version: 0.1.0
+
+- `GET /` — Root
+- `GET /api/v1/` — Root
+- `POST /api/v1/data-sources/csv-table` — Register Csv Table Source
+- `POST /api/v1/data-sources/postgis` — Register Postgis Source
+- `POST /api/v1/data-sources/url` — Register Url Source
+- `POST /api/v1/data-sources/wfs` — Register Wfs Source
+- `POST /api/v1/data-sources/wms` — Register Wms Source
+- `DELETE /api/v1/data-sources/{upload_id}` — Delete Data Source
+- `GET /api/v1/data-sources/{upload_id}` — Get Data Source
+- `PATCH /api/v1/data-sources/{upload_id}` — Update Data Source
+- `GET /api/v1/data-sources/{upload_id}/preview` — Preview Data Source
+- `POST /api/v1/feedback` — Feedback Endpoint
+- `GET /api/v1/health` — Health
+- `POST /api/v1/planner/intent` — Plan Intent
+- `GET /api/v1/plugins` — List Plugins
+- `GET /api/v1/plugins/{plugin_id}` — Get Plugin
+- `PATCH /api/v1/plugins/{plugin_id}` — Patch Plugin
+- `GET /api/v1/plugins/{plugin_id}/config` — Get Plugin Config
+- `PUT /api/v1/plugins/{plugin_id}/config` — Put Plugin Config
+- `GET /api/v1/projects` — List Projects
+- `POST /api/v1/projects` — Create Project
+- `GET /api/v1/projects/{project_id}` — Get Project
+- `GET /api/v1/projects/{project_id}/data-sources` — List Project Data Sources
+- `POST /api/v1/query` — Query Endpoint
+- `GET /api/v1/requests` — List Requests
+- `GET /api/v1/requests/{request_id}` — Get Request
+- `GET /api/v1/requests/{request_id}/documents/{filename}` — Download Request Document
+- `GET /api/v1/requests/{request_id}/map-layers` — Get Request Map Layers
+- `GET /api/v1/requests/{request_id}/outputs` — Get Request Outputs
+- `GET /api/v1/requests/{request_id}/outputs/files` — List Request Output Files
+- `GET /api/v1/requests/{request_id}/outputs/files/{filename}` — Download Request Output File
+- `POST /api/v1/requests/{request_id}/outputs/save` — Save Request Outputs
+- `POST /api/v1/settings/llm/smoke-test` — Llm Smoke Test
+- `GET /api/v1/settings/runtime` — Get Runtime Settings
+- `GET /api/v1/uploads` — List Uploads
+- `POST /api/v1/uploads/raster` — Upload Raster
+- `POST /api/v1/uploads/vector` — Upload Vector
+- `GET /api/v1/uploads/{upload_id}` — Get Upload Metadata
+- `GET /api/v1/uploads/{upload_id}/file` — Download Upload File
+- `GET /api/v1/weights` — Get Weights
+- `POST /api/v1/weights/proposals/apply` — Apply Weight Proposal
+- `POST /api/v1/weights/reload` — Reload Weights
+- `POST /api/v1/weights/save` — Save Weights
+- `POST /data-sources/csv-table` — Register Csv Table Source
+- `POST /data-sources/postgis` — Register Postgis Source
+- `POST /data-sources/url` — Register Url Source
+- `POST /data-sources/wfs` — Register Wfs Source
+- `POST /data-sources/wms` — Register Wms Source
+- `DELETE /data-sources/{upload_id}` — Delete Data Source
+- `GET /data-sources/{upload_id}` — Get Data Source
+- `PATCH /data-sources/{upload_id}` — Update Data Source
+- `GET /data-sources/{upload_id}/preview` — Preview Data Source
+- `POST /feedback` — Feedback Endpoint
+- `GET /health` — Health
+- `POST /planner/intent` — Plan Intent
+- `GET /plugins` — List Plugins
+- `GET /plugins/{plugin_id}` — Get Plugin
+- `PATCH /plugins/{plugin_id}` — Patch Plugin
+- `GET /plugins/{plugin_id}/config` — Get Plugin Config
+- `PUT /plugins/{plugin_id}/config` — Put Plugin Config
+- `GET /projects` — List Projects
+- `POST /projects` — Create Project
+- `GET /projects/{project_id}` — Get Project
+- `GET /projects/{project_id}/data-sources` — List Project Data Sources
+- `POST /query` — Query Endpoint
+- `GET /requests` — List Requests
+- `GET /requests/{request_id}` — Get Request
+- `GET /requests/{request_id}/documents/{filename}` — Download Request Document
+- `GET /requests/{request_id}/map-layers` — Get Request Map Layers
+- `GET /requests/{request_id}/outputs` — Get Request Outputs
+- `GET /requests/{request_id}/outputs/files` — List Request Output Files
+- `GET /requests/{request_id}/outputs/files/{filename}` — Download Request Output File
+- `POST /requests/{request_id}/outputs/save` — Save Request Outputs
+- `POST /settings/llm/smoke-test` — Llm Smoke Test
+- `GET /settings/runtime` — Get Runtime Settings
+- `GET /uploads` — List Uploads
+- `POST /uploads/raster` — Upload Raster
+- `POST /uploads/vector` — Upload Vector
+- `GET /uploads/{upload_id}` — Get Upload Metadata
+- `GET /uploads/{upload_id}/file` — Download Upload File
+- `GET /weights` — Get Weights
+- `POST /weights/proposals/apply` — Apply Weight Proposal
+- `POST /weights/reload` — Reload Weights
+- `POST /weights/save` — Save Weights

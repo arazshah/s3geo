@@ -1,0 +1,320 @@
+"""
+orchestrator.planning.op_catalog
+
+Logical operation catalog.
+
+This is the bridge between:
+    QuerySpec logical operations
+and
+    real plugin capabilities.
+
+Design goal
+-----------
+The LLM/planner should reason in semantic operations such as:
+    - spatial_nearest
+    - top_n
+    - spatial_join
+    - buffer
+    - summarize_vector
+    - display_vector
+
+while the executor still calls deterministic registered capabilities such as:
+    - find_nearest_neighbors
+    - rank_features
+    - spatial_join_features
+    - buffer_vector_features
+    - summarize_vector_layer
+    - display_vector_layer
+
+This catalog is intentionally explicit. It does not hard-code a single user
+query. It exposes reusable spatial/data operations in a stable format.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+
+@dataclass(frozen=True)
+class OpDescriptor:
+    op_name: str
+    capability_name: str
+    input_map: dict[str, str] = field(default_factory=dict)
+    input_types: dict[str, str] = field(default_factory=dict)
+    param_map: dict[str, str] = field(default_factory=dict)
+    output_type: str = "json"
+    notes: str = ""
+
+
+_NEAREST_PARAM_MAP = {
+    "k": "k",
+    "max_distance_m": "max_distance",
+    "max_distance": "max_distance",
+    "drop_unmatched": "drop_unmatched",
+    "engine": "engine",
+    "precision": "precision",
+    "include_target_geometry": "include_target_geometry",
+    "source_crs": "source_crs",
+    "metadata": "metadata",
+}
+
+_RANK_PARAM_MAP = {
+    "score_field": "score_field",
+    "rank_field": "rank_field",
+    "descending": "descending",
+    "limit": "limit",
+    "metadata": "metadata",
+}
+
+_SPATIAL_JOIN_PARAM_MAP = {
+    "predicate": "predicate",
+    "join_type": "join_type",
+    "cardinality": "cardinality",
+    "engine": "engine",
+    "drop_failed": "drop_failed",
+    "include_target_properties": "include_target_properties",
+    "flatten_target_properties": "flatten_target_properties",
+    "target_property_prefix": "target_property_prefix",
+    "source_crs": "source_crs",
+    "metadata": "metadata",
+}
+
+_BUFFER_PARAM_MAP = {
+    "distance": "distance",
+    "units": "units",
+    "quad_segs": "quad_segs",
+    "engine": "engine",
+    "dissolve": "dissolve",
+    "cap_style": "cap_style",
+    "join_style": "join_style",
+    "mitre_limit": "mitre_limit",
+    "metadata": "metadata",
+}
+
+
+OP_CATALOG: dict[str, OpDescriptor] = {
+    # ---------------------------------------------------------------------
+    # Data loading / database access
+    # ---------------------------------------------------------------------
+    "load_vector": OpDescriptor(
+        op_name="load_vector",
+        capability_name="load_local_vector",
+        param_map={
+            "path": "path",
+            "strict_extensions": "strict_extensions",
+            "layer": "layer",
+            "max_features": "max_features",
+        },
+        output_type="vector",
+        notes="Load a local vector file. For PostGIS, prefer query_database.",
+    ),
+
+    "query_database": OpDescriptor(
+        op_name="query_database",
+        capability_name="query_database_postgis",
+        param_map={
+            "source_type": "source_type",
+            "mode": "mode",
+            "schema": "schema",
+            "table": "table",
+            "columns": "columns",
+            "geom_col": "geom_col",
+            "geom_alias": "geom_alias",
+            "where": "where",
+            "limit": "limit",
+            "output_srid": "output_srid",
+            "profile": "profile",
+            "dsn": "dsn",
+            "host": "host",
+            "port": "port",
+            "database": "database",
+            "user": "user",
+            "password": "password",
+            "connect_timeout": "connect_timeout",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes=(
+            "Canonical query_database/PostGIS V1. LLM must not generate raw SQL. "
+            "Use source_type=postgis, mode=select_table, schema, table, columns, "
+            "geom_col, geom_alias, where, limit, output_srid. "
+            "For semantic user concepts, prefer schema-aware resolved layer "
+            "parameters from the semantic PostGIS resolver."
+        ),
+    ),
+
+    # Alias with a more explicit name for planners that reason in PostGIS terms.
+    "load_postgis_layer": OpDescriptor(
+        op_name="load_postgis_layer",
+        capability_name="query_database_postgis",
+        param_map={
+            "source_type": "source_type",
+            "mode": "mode",
+            "schema": "schema",
+            "table": "table",
+            "columns": "columns",
+            "geom_col": "geom_col",
+            "geom_alias": "geom_alias",
+            "where": "where",
+            "limit": "limit",
+            "output_srid": "output_srid",
+            "profile": "profile",
+            "dsn": "dsn",
+            "host": "host",
+            "port": "port",
+            "database": "database",
+            "user": "user",
+            "password": "password",
+            "connect_timeout": "connect_timeout",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes=(
+            "Semantic alias for query_database when loading a PostGIS table/layer. "
+            "Use only schema-aware table, column and predicate information."
+        ),
+    ),
+
+    # ---------------------------------------------------------------------
+    # Attribute filtering / sorting / limiting
+    # ---------------------------------------------------------------------
+    "filter_attribute": OpDescriptor(
+        op_name="filter_attribute",
+        capability_name="filter_features",
+        input_map={"vector": "features"},
+        input_types={"vector": "vector"},
+        param_map={
+            "where": "where",
+            "case_sensitive": "case_sensitive",
+            "sort_by": "sort_by",
+            "sort_order": "sort_order",
+            "limit": "limit",
+            "offset": "offset",
+            "bbox": "bbox",
+            "bbox_mode": "bbox_mode",
+            "geometry_type": "geometry_type",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes=(
+            "Filter, sort, offset, and limit vector features by attributes or bbox. "
+            "Use for simple attribute predicates and non-spatial top/limit operations."
+        ),
+    ),
+
+    "sort_limit": OpDescriptor(
+        op_name="sort_limit",
+        capability_name="filter_features",
+        input_map={"vector": "features"},
+        input_types={"vector": "vector"},
+        param_map={
+            "sort_by": "sort_by",
+            "sort_order": "sort_order",
+            "limit": "limit",
+            "offset": "offset",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes=(
+            "Semantic alias for sorting and limiting features when no ranking field "
+            "needs to be generated."
+        ),
+    ),
+
+    # ---------------------------------------------------------------------
+    # Nearest / distance / proximity analysis
+    # ---------------------------------------------------------------------
+    "spatial_nearest": OpDescriptor(
+        op_name="spatial_nearest",
+        capability_name="find_nearest_neighbors",
+        input_map={
+            "source": "source_features",
+            "target": "target_features",
+        },
+        input_types={
+            "source": "vector",
+            "target": "vector",
+        },
+        param_map=_NEAREST_PARAM_MAP,
+        output_type="vector",
+        notes=(
+            "Use when the user asks for nearest/closest target features for each "
+            "source feature, e.g. 'nearest X to each Y', 'closest hospital to every "
+            "school', 'نزدیک‌ترین X به هر Y'. Set k=1 for one closest target per "
+            "source. Output preserves source properties and adds: "
+            "_nearest_distance, _neighbor_rank, _source_index, _target_index, "
+            "_nearest_status, _nearest_engine, _target_properties. "
+            "If include_target_geometry=true, _target_geometry is also included. "
+            "For top N smallest distances, follow with top_n/rank_features using "
+            "score_field='_nearest_distance', descending=false, limit=N. "
+            "Use a metric/projected CRS when distances must be meters."
+        ),
+    ),
+
+    "nearest_neighbor": OpDescriptor(
+        op_name="nearest_neighbor",
+        capability_name="find_nearest_neighbors",
+        input_map={
+            "source": "source_features",
+            "target": "target_features",
+        },
+        input_types={
+            "source": "vector",
+            "target": "vector",
+        },
+        param_map=_NEAREST_PARAM_MAP,
+        output_type="vector",
+        notes=(
+            "Alias of spatial_nearest. Prefer spatial_nearest in new plans. "
+            "Useful for k-nearest-neighbor / KNN / proximity requests."
+        ),
+    ),
+
+    "filter_by_distance": OpDescriptor(
+        op_name="filter_by_distance",
+        capability_name="find_nearest_neighbors",
+        input_map={
+            "vector": "source_features",
+            "reference": "target_features",
+        },
+        input_types={
+            "vector": "vector",
+            "reference": "vector",
+        },
+        param_map=_NEAREST_PARAM_MAP,
+        output_type="vector",
+        notes=(
+            "Use for 'features nearer than X meters to reference features'. "
+            "Set max_distance_m=X, k=1 or desired k, and drop_unmatched=true "
+            "to remove features with no neighbor within the threshold. "
+            "This uses the nearest-neighbor engine and adds _nearest_distance."
+        ),
+    ),
+
+    "distance_to": OpDescriptor(
+        op_name="distance_to",
+        capability_name="calculate_distances",
+        input_map={
+            "vector": "source_features",
+            "target": "target_features",
+        },
+        input_types={
+            "vector": "vector",
+            "target": "vector",
+        },
+        param_map={
+            "mode": "mode",
+            "engine": "engine",
+            "precision": "precision",
+            "drop_failed": "drop_failed",
+            "source_crs": "source_crs",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes=(
+            "Calculate planar nearest or pairwise distances between source and "
+            "target features. For 'nearest target per source', spatial_nearest is "
+            "usually the better operation. Use a metric/projected CRS for meters."
+        ),
+    ),
+

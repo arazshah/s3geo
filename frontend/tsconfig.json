@@ -1,0 +1,24 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.node.json"
+    }
+  ],
+  "exclude": [
+    "**/*.backup.ts",
+    "**/*.backup.tsx",
+    "**/*.stage*.ts",
+    "**/*.stage*.tsx",
+    "src/**/*.backup.ts",
+    "src/**/*.backup.tsx",
+    "src/**/*.stage*.ts",
+    "src/**/*.stage*.tsx",
+    "backups",
+    "dist",
+    "node_modules"
+  ]
+}

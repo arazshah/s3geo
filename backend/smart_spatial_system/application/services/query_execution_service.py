@@ -1,0 +1,1194 @@
+"""
+orchestrator.service
+
+Service facade for Smart Spatial System.
+
+This module is the operational boundary between:
+    - API / Frontend
+    - internal orchestration modules
+
+The frontend/API should call this service instead of directly using:
+    - routers
+    - registries
+    - runners
+    - production response builder
+    - feedback / learning internals
+
+Main responsibilities:
+    1. Load plugin registry
+    2. Load persisted router weights
+    3. Build weighted router
+    4. Run natural query pipeline
+    5. Build production user response
+    6. Keep request/audit history for feedback
+    7. Convert feedback into learning signals and weight proposals
+"""
+
+from __future__ import annotations
+
+import os
+
+import uuid
+from dataclasses import asdict, dataclass, field, is_dataclass
+from pathlib import Path
+
+from orchestrator.runtime_paths import RuntimePaths
+from typing import Any
+
+from orchestrator.error_contract import CATEGORY_INTERNAL, exception_to_error
+
+
+class _EnabledOnlyRegistryView:
+    """
+    Lightweight registry-like wrapper that exposes only enabled capabilities.
+
+    Compatible with routers that expect a registry object implementing:
+      - resolve(capability_name)
+      - descriptor_for(capability_name)
+      - registered_capability_names()
+    """
+
+    def __init__(self, bindings: dict[str, Any], descriptors: dict[str, Any]) -> None:
+        self._bindings = dict(bindings or {})
+        self._descriptors = dict(descriptors or {})
+
+    def resolve(self, capability_name: str) -> Any:
+        if capability_name not in self._bindings:
+            raise ValueError(f"Capability '{capability_name}' is not registered.")
+        return self._bindings[capability_name]
+
+    def descriptor_for(self, capability_name: str) -> Any:
+        if capability_name not in self._descriptors:
+            raise ValueError(f"Capability '{capability_name}' has no descriptor.")
+        return self._descriptors[capability_name]
+
+    def registered_capability_names(self) -> list[str]:
+        return sorted(self._bindings.keys())
+
+
+
+class _EnabledOnlyCapabilityRouter:
+    """
+    Lightweight router wrapper exposing only enabled capability bindings.
+    Compatible with plan builders/executors that expect:
+      - resolve(name)
+      - registered_capability_names()
+    """
+
+    def __init__(self, bindings: dict[str, Any]) -> None:
+        self._bindings = dict(bindings or {})
+
+    def resolve(self, capability_name: str) -> Any:
+        if capability_name not in self._bindings:
+            raise ValueError(
+                f"Capability '{capability_name}' is not registered in enabled router."
+            )
+        return self._bindings[capability_name]
+
+    def registered_capability_names(self) -> list[str]:
+        return sorted(self._bindings.keys())
+
+
+from orchestrator.capability_registry import CapabilityRegistry
+from orchestrator.plugin_modules import DEFAULT_SAFE_PLUGIN_MODULES
+from orchestrator.plugin_state import (
+    PluginStateStore,
+    PluginStateStoreConfig,
+    PluginStateStoreError,
+)
+from orchestrator.capability_scoring import KeywordScoringCapabilityRouter
+from orchestrator.feedback import FeedbackCollector, UserFeedbackInput
+from orchestrator.learning_signals import RouterLearningSignalBuilder
+from orchestrator.map_layers import MapLayerBuilder
+from orchestrator.input_reference_resolver import (
+    UploadReferenceResolver,
+    UploadReferenceResolverConfig,
+    UploadReferenceResolverError,
+)
+from orchestrator.data_source_service import DataSourceService, DataSourceServiceError
+from orchestrator.map_layer_service import MapLayerService, MapLayerServiceError
+from orchestrator.output_service import OutputService, OutputServiceError
+from orchestrator.output_storage import (
+    OutputStorage,
+    OutputStorageConfig,
+    OutputStorageError,
+)
+from orchestrator.project_store import (
+    ProjectStore,
+    ProjectStoreConfig,
+)
+from orchestrator.project_service import (
+    ProjectService,
+    ProjectServiceError,
+)
+from orchestrator.production_response import (
+    ProductionResponseBuilder,
+    ProductionResponseConfig,
+)
+from orchestrator.routing_aware_natural_query_runner import (
+    run_natural_query_with_routing_evidence,
+)
+from orchestrator.upload_service import UploadService, UploadServiceError
+from orchestrator.upload_storage import (
+    UploadStorage,
+    UploadStorageConfig,
+    UploadStorageError,
+)
+from orchestrator.weight_proposals import (
+    InMemoryRouterWeightStore,
+    RouterWeightProposalCollector,
+    RouterWeightProposalEngine,
+    WeightProposal,
+    WeightStoreConfig,
+)
+from orchestrator.weight_store_persistence import (
+    RouterWeightStorePersistence,
+    WeightStorePersistenceConfig,
+    WeightStorePersistenceError,
+)
+from orchestrator.weighted_router import WeightedCapabilityRouter, WeightedRouterConfig
+from orchestrator.planning.dag_executor import DagExecutionError, DagValidationError
+from orchestrator.planning.llm_spec_generator import (
+    LLMQuerySpecGenerator,
+    LLMSpecGenerationError,
+    OpenAICompatibleLLMClient,
+    query_spec_to_dict,
+)
+from orchestrator.planning.planner import PlanningError
+from orchestrator.planning.runner import make_registry_planning_runner
+from orchestrator.planning.query_spec_contract import validate_query_spec_contract
+from smart_spatial_system.application.services.planning_response_adapter import (
+    planning_outputs_to_response_payload,
+    planning_trace_to_steps,
+)
+
+
+from smart_spatial_system.application.services.planning_execution_policy import (
+    is_kernel_execution_enabled,
+    is_query_spec_planning_enabled,
+)
+
+
+from smart_spatial_system.application.services.query_spec_enrichment import (
+    enrich_query_database_params_from_inputs,
+)
+
+
+from smart_spatial_system.application.services.llm_intent_adapter import (
+    LLMIntentAdapterError,
+    apply_intent_to_query,
+    is_llm_planning_enabled,
+    plan_intent_with_llm as run_llm_intent_planner,
+)
+
+
+from smart_spatial_system.application.services.system_status_query_handler import (
+    is_system_status_query,
+    try_handle_system_status_query,
+)
+
+
+from smart_spatial_system.application.services.vector_geojson_helpers import (
+    find_geojson_like,
+    read_geojson_path_if_possible,
+    summarize_feature_collection,
+)
+
+
+from smart_spatial_system.application.services.vector_query_classifier import (
+    is_vector_display_query,
+    is_vector_summary_query,
+)
+
+
+from smart_spatial_system.application.services.vector_display_handler import (
+    try_handle_vector_display_directly,
+)
+
+
+from smart_spatial_system.application.services.query_execution.domain_direct_response_handlers import handle_default_direct_response, handle_default_preflight_direct_response
+from smart_spatial_system.application.services.query_execution.natural_query_context import (
+    prepare_natural_query_context,
+)
+
+from smart_spatial_system.application.services.query_execution.natural_query_execution import (
+    execute_and_persist_natural_query_success_path,
+)
+
+from smart_spatial_system.application.services.query_execution.natural_query_failure import (
+    build_and_persist_failed_natural_query_response,
+)
+
+from smart_spatial_system.application.services.query_execution.planning_execution import (
+    execute_query_spec_planning,
+)
+
+from smart_spatial_system.application.services.query_execution.planning_persistence import (
+    persist_query_spec_planning_record,
+)
+
+from smart_spatial_system.application.services.query_execution.planning_response import (
+    build_query_spec_planning_response,
+)
+
+from smart_spatial_system.application.services.query_execution.planning_context import (
+    build_query_spec_planning_context,
+)
+
+from smart_spatial_system.application.services.query_execution.postgis_planning_context import (
+    _build_query_spec_runtime_inputs,
+    _extract_semantic_planning_context_from_sources,
+)
+
+
+def _is_feature_collection(value: Any) -> bool:
+    return (
+        isinstance(value, dict)
+        and value.get("type") == "FeatureCollection"
+        and isinstance(value.get("features"), list)
+    )
+
+
+_SENSITIVE_METADATA_KEYS = {
+    "password",
+    "passwd",
+    "secret",
+    "token",
+    "api_key",
+    "apikey",
+    "authorization",
+}
+
+
+def _redact_sensitive_json(value: Any) -> Any:
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            key_text = str(key).lower()
+            if key_text in _SENSITIVE_METADATA_KEYS or any(
+                marker in key_text
+                for marker in ("password", "secret", "token", "api_key", "apikey")
+            ):
+                redacted[key] = "***"
+            else:
+                redacted[key] = _redact_sensitive_json(item)
+        return redacted
+
+    if isinstance(value, list):
+        return [_redact_sensitive_json(item) for item in value]
+
+    return value
+
+
+
+@dataclass(frozen=True)
+class OrchestratorServiceConfig:
+    """
+    Configuration for OrchestratorService.
+    """
+
+    plugin_modules: list[str] = field(default_factory=lambda: list(DEFAULT_SAFE_PLUGIN_MODULES))
+
+    use_weighted_router: bool = True
+    load_persisted_weights: bool = True
+    weights_path: str | Path = "weights/router_weights.json"
+
+    # Runtime root for generated local state.
+    # If outputs/uploads/projects paths are not provided explicitly, they are
+    # resolved from RuntimePaths using this value, SMART_SPATIAL_RUNTIME_DIR, or
+    # the default runtime root.
+    runtime_dir: str | Path | None = None
+    outputs_path: str | Path | None = None
+    uploads_path: str | Path | None = None
+    projects_path: str | Path | None = None
+    reports_path: str | Path | None = None
+    plugin_state_path: str | Path | None = None
+    resolve_upload_refs_with_plugins: bool = True
+    raster_loader_plugin_module: str = "plugins.local_raster_loader"
+    vector_loader_plugin_module: str = "plugins.local_vector_loader"
+    enforce_loader_contract: bool = True
+    allow_adaptive_loader_fallback: bool = True
+    persist_outputs: bool = True
+
+    default_weight: float = 1.0
+    min_weight: float = 0.0
+    max_weight: float = 3.0
+
+    min_score: float = 0.01
+
+    response_language: str = "fa"
+
+    # Experimental opt-in: execute QuerySpec plans through the
+    # geochat_kernel execution bridge in addition to the current DAG path.
+    # Default is False to keep production behavior unchanged.
+    enable_kernel_execution: bool = False
+
+    # Phase 4 hardening:
+    # When False (default), request-level metadata may DISABLE kernel execution
+    # but may NOT enable it. This prevents arbitrary callers from turning on the
+    # experimental kernel path. When True, request metadata may also enable it.
+    allow_request_kernel_execution: bool = False
+
+    include_response_debug: bool = False
+
+    keep_history: bool = True
+    max_history_items: int = 1000
+
+    auto_save_weights_after_apply: bool = True
+
+    def __post_init__(self) -> None:
+        if not self.plugin_modules:
+            raise ValueError("plugin_modules must not be empty.")
+
+        if self.min_score < 0:
+            raise ValueError("min_score must be >= 0.")
+
+        if self.max_history_items < 0:
+            raise ValueError("max_history_items must be >= 0.")
+
+        if self.default_weight < 0:
+            raise ValueError("default_weight must be >= 0.")
+
+        if self.min_weight < 0:
+            raise ValueError("min_weight must be >= 0.")
+
+        if self.max_weight < self.min_weight:
+            raise ValueError("max_weight must be >= min_weight.")
+
+        if self.response_language not in {"fa", "en"}:
+            raise ValueError("response_language must be one of: fa, en.")
+
+
+class OrchestratorServiceError(RuntimeError):
+    """
+    Service-level error.
+
+    The legacy message remains unchanged; structured_error is additive.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        structured_error: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.structured_error = structured_error
+
+
+def _service_exception_chain(exc: BaseException) -> list[BaseException]:
+    chain: list[BaseException] = []
+    seen: set[int] = set()
+    current: BaseException | None = exc
+
+    while current is not None and id(current) not in seen:
+        chain.append(current)
+        seen.add(id(current))
+
+        cause = getattr(current, "__cause__", None)
+        context = getattr(current, "__context__", None)
+
+        if isinstance(cause, BaseException):
+            current = cause
+        elif isinstance(context, BaseException):
+            current = context
+        else:
+            current = None
+
+    return chain
+
+
+def _find_structured_error_in_exception_chain(
+    exc: BaseException,
+) -> dict[str, Any] | None:
+    for item in _service_exception_chain(exc):
+        structured_error = getattr(item, "structured_error", None)
+
+        if isinstance(structured_error, dict):
+            return structured_error
+
+    return None
+
+
+def _service_exception_to_structured_error(
+    exc: BaseException,
+    *,
+    stage: str | None = None,
+    source: str = "orchestrator_service",
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """
+    Preserve an existing structured_error from the exception chain when present.
+    Otherwise create a generic service-level structured error.
+    """
+    existing = _find_structured_error_in_exception_chain(exc)
+
+    if isinstance(existing, dict):
+        payload = dict(existing)
+        payload_details = dict(payload.get("details") or {})
+
+        if stage is not None:
+            payload_details.setdefault("service_stage", stage)
+
+        if details:
+            payload_details.update(details)
+
+        payload["details"] = payload_details
+        return payload
+
+    merged_details: dict[str, Any] = {
+        "exception_chain": [
+            {
+                "type": type(item).__name__,
+                "message": str(item) or type(item).__name__,
+            }
+            for item in _service_exception_chain(exc)
+        ],
+    }
+
+    if stage is not None:
+        merged_details["stage"] = stage
+
+    if details:
+        merged_details.update(details)
+
+    return exception_to_error(
+        exc,
+        code="service.unexpected_exception",
+        category=CATEGORY_INTERNAL,
+        retryable=False,
+        source=source,
+        details=merged_details,
+    ).to_dict()
+
+
+def _service_error_from_exception(
+    exc: BaseException,
+    *,
+    stage: str | None = None,
+    message: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> OrchestratorServiceError:
+    final_message = str(exc) if message is None else message
+
+    return OrchestratorServiceError(
+        final_message,
+        structured_error=_service_exception_to_structured_error(
+            exc,
+            stage=stage,
+            details=details,
+        ),
+    )
+
+
+
+def _json_safe(value: Any) -> Any:
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+
+    if isinstance(value, dict):
+        return {
+            str(key): _json_safe(item)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, (list, tuple, set)):
+        return [
+            _json_safe(item)
+            for item in value
+        ]
+
+    if hasattr(value, "to_dict") and callable(value.to_dict):
+        return _json_safe(value.to_dict())
+
+    if is_dataclass(value):
+        return _json_safe(asdict(value))
+
+    payload = getattr(value, "__dict__", None)
+
+    if isinstance(payload, dict) and payload:
+        return _json_safe(payload)
+
+    return repr(value)
+
+class QueryExecutionServiceError(RuntimeError):
+    """Raised when a query execution service operation fails."""
+
+
+
+_QUERY_EXECUTION_DOMAIN_MODULE_PREFIX = (
+    "smart_spatial_system.application.services.query_execution"
+)
+
+
+
+_APPLICATION_SERVICE_DOMAIN_MODULE_PREFIX = "smart_spatial_system.application.services"
+
+
+class QueryExecutionService:
+    """Application service boundary for query execution operations."""
+
+    def __init__(self, context: Any) -> None:
+        if context is None:
+            raise QueryExecutionServiceError("Orchestrator context dependency is required.")
+        self._context = context
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._context, name)
+
+    @staticmethod
+    def _llm_planning_enabled() -> bool:
+        return is_llm_planning_enabled()
+
+
+
+    @staticmethod
+    def _query_spec_planning_enabled() -> bool:
+        return is_query_spec_planning_enabled()
+
+
+
+    def _kernel_execution_enabled(
+        self,
+        *,
+        metadata: dict[str, Any] | None = None,
+        final_metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        return is_kernel_execution_enabled(
+            config=getattr(self, "config", None),
+            metadata=metadata,
+            final_metadata=final_metadata,
+        )
+
+
+
+    def _planning_trace_to_steps(self, trace: list[Any]) -> list[dict[str, Any]]:
+        return planning_trace_to_steps(trace)
+
+
+
+    def _planning_outputs_to_response_payload(
+        self,
+        planning_result: Any,
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any] | None]:
+        return planning_outputs_to_response_payload(planning_result)
+
+
+
+    def _enrich_query_database_params_from_inputs(
+        self,
+        query_spec: Any,
+        resolved_inputs: dict[str, Any],
+    ) -> None:
+        return enrich_query_database_params_from_inputs(
+            query_spec=query_spec,
+            resolved_inputs=resolved_inputs,
+        )
+
+
+
+
+    def _is_vector_only_planning_request(
+        self,
+        *,
+        final_metadata: dict[str, Any],
+        metadata: dict[str, Any] | None = None,
+    ) -> bool:
+        meta = metadata or {}
+        avoid = set(final_metadata.get("frontend_avoid_capabilities") or meta.get("frontend_avoid_capabilities") or [])
+        llm_intent = final_metadata.get("llm_intent") or meta.get("llm_intent") or {}
+        required_inputs = llm_intent.get("required_inputs") if isinstance(llm_intent, dict) else {}
+
+        frontend_requires_raster = final_metadata.get(
+            "frontend_requires_raster",
+            meta.get("frontend_requires_raster"),
+        )
+        vector_only_hint = final_metadata.get(
+            "frontend_selected_sources_look_vector_only",
+            meta.get("frontend_selected_sources_look_vector_only"),
+        )
+        preferred_mode = str(
+            final_metadata.get(
+                "frontend_preferred_execution_mode",
+                meta.get("frontend_preferred_execution_mode", ""),
+            )
+            or ""
+        ).lower()
+
+        raster_forbidden_by_llm = (
+            isinstance(required_inputs, dict)
+            and required_inputs.get("raster") is False
+            and required_inputs.get("vector") is True
+        )
+
+        raster_caps_avoided = bool(
+            {
+                "calculate_spectral_index",
+                "threshold_raster",
+                "raster_to_vector",
+            }
+            & avoid
+        )
+
+        return bool(
+            frontend_requires_raster is False
+            or raster_forbidden_by_llm
+            or raster_caps_avoided
+            or preferred_mode == "vector_only_if_possible"
+            or vector_only_hint is True
+        )
+
+    def _planning_failure_response(
+        self,
+        *,
+        query: str,
+        final_request_id: str,
+        final_metadata: dict[str, Any],
+        exc: Exception,
+        planning_structured_error: dict[str, Any],
+    ) -> dict[str, Any]:
+        message = str(exc) or "Planning failed."
+
+        structured_error = dict(planning_structured_error or {})
+        details = dict(structured_error.get("details") or {})
+
+        if "missing input role" in message.lower() or "missing input role(s)" in message.lower():
+            structured_error["code"] = "planning.missing_input_roles"
+            structured_error["category"] = "planning_error"
+            structured_error["message"] = message
+            details.setdefault("operation", "spatial_nearest")
+            details.setdefault("missing_roles", ["source", "target"])
+
+        structured_error.setdefault("code", "planning.failed")
+        structured_error.setdefault("category", "planning_error")
+        structured_error.setdefault("retryable", False)
+        structured_error["details"] = details
+        structured_error.setdefault("source", "orchestrator_service")
+
+        final_metadata["query_spec_planning_enabled"] = True
+        final_metadata["planning_attempted"] = True
+        final_metadata["planning_error"] = message
+        final_metadata["planning_structured_error"] = structured_error
+        final_metadata["structured_error"] = structured_error
+        final_metadata["service_structured_error"] = structured_error
+
+        answer = f"در برنامه‌ریزی درخواست خطا رخ داد: {message}"
+
+        return {
+            "status": "failed",
+            "request_id": final_request_id,
+            "query": query,
+            "ok": False,
+            "answer": answer,
+            "message": answer,
+            "summary": answer,
+            "outputs": {},
+            "layers": [],
+            "map_layers": [],
+            "map": {"layers": []},
+            "documents": [],
+            "files": [],
+            "reports": [],
+            "artifacts": [],
+            "warnings": [
+                "برنامه‌ریزی درخواست ناموفق بود.",
+                f"جزئیات خطا: {message}",
+            ],
+            "errors": [structured_error],
+            "next_actions": [
+                "نقش داده‌های ورودی را مشخص کنید.",
+                "برای nearest/proximity نقش‌های source و target الزامی هستند.",
+                "ورودی‌های انتخاب‌شده و metadata را بررسی کنید.",
+            ],
+            "metadata": final_metadata,
+            "confidence": {
+                "level": None,
+                "score": None,
+                "llm_action": "query_spec_planning",
+                "is_ambiguous": False,
+                "competitive_gap": None,
+            },
+            "audit_ref": {
+                "request_id": None,
+                "query_hash": None,
+                "status": "failed",
+                "plan_steps": None,
+            },
+            "trace": [],
+            "steps": [],
+            "structured_error": structured_error,
+        }
+
+
+
+    def _try_handle_query_with_planning(
+            self,
+            *,
+            query: str,
+            resolved_inputs: dict[str, Any],
+            final_request_id: str,
+            final_metadata: dict[str, Any],
+            user_context: dict[str, Any] | None = None,
+            original_inputs: dict[str, Any] | None = None,
+            band_map: dict[str, int] | None = None,
+            metadata: dict[str, Any] | None = None,
+            project_id: str | None = None,
+        ) -> dict[str, Any] | None:
+            if not self._query_spec_planning_enabled():
+                return None
+
+            try:
+                # query_spec_contracts are assembled by query_execution.planning_context.
+                planning_context, planning_context_metadata = build_query_spec_planning_context(
+                    query=query,
+                    resolved_inputs=resolved_inputs,
+                    user_context=user_context,
+                    metadata=metadata,
+                    project_id=project_id,
+                    response_language=getattr(self.config, "response_language", None),
+                    extract_semantic_planning_context=_extract_semantic_planning_context_from_sources,
+                )
+                final_metadata.update(planning_context_metadata)
+
+                # Source-level compatibility marker for integration tests:
+                # make_registry_planning_runner(self._build_enabled_registry_view())
+                # LLMQuerySpecGenerator, validate_query_spec_contract, make_registry_planning_runner,
+                # run_with_kernel_execution, and query_spec_planning kernel execution are delegated
+                # to query_execution.planning_execution.
+                query_spec, planning_result, kernel_execution_enabled = execute_query_spec_planning(
+                    query=query,
+                    planning_context=planning_context,
+                    resolved_inputs=resolved_inputs,
+                    user_context=user_context,
+                    metadata=metadata,
+                    final_metadata=final_metadata,
+                    build_runtime_inputs=_build_query_spec_runtime_inputs,
+                    enrich_query_database_params=self._enrich_query_database_params_from_inputs,
+                    build_enabled_registry_view=self._build_enabled_registry_view,
+                    kernel_execution_enabled=self._kernel_execution_enabled,
+                    llm_client_factory=OpenAICompatibleLLMClient,
+                    query_spec_generator_cls=LLMQuerySpecGenerator,
+                    planning_runner_factory=make_registry_planning_runner,
+                    query_spec_contract_validator=validate_query_spec_contract,
+                )
+
+                # planning_summary, kernel_execution_parity, and query_spec_planning_kernel_execution
+                # are assembled by query_execution.planning_response.
+                (
+                    production_response,
+                    planning_metadata,
+                    success,
+                    planning_error,
+                    planning_structured_error,
+                ) = build_query_spec_planning_response(
+                    planning_result=planning_result,
+                    final_metadata=final_metadata,
+                    final_request_id=final_request_id,
+                    query_spec=query_spec,
+                    kernel_execution_enabled=kernel_execution_enabled,
+                    planning_outputs_to_response_payload=self._planning_outputs_to_response_payload,
+                    planning_trace_to_steps=self._planning_trace_to_steps,
+                    query_spec_to_dict_func=query_spec_to_dict,
+                    redact_sensitive_json=_redact_sensitive_json,
+                )
+
+                # _remember, project_service.attach_request, _persist_outputs_for_record,
+                # and project_service.attach_output are delegated to query_execution.planning_persistence.
+                persist_query_spec_planning_record(
+                    request_id=final_request_id,
+                    query=query,
+                    resolved_inputs=resolved_inputs,
+                    original_inputs=original_inputs,
+                    band_map=band_map,
+                    user_context=user_context,
+                    metadata=metadata,
+                    planning_metadata=planning_metadata,
+                    project_id=project_id,
+                    query_spec=query_spec,
+                    planning_result=planning_result,
+                    production_response=production_response,
+                    success=success,
+                    planning_error=planning_error,
+                    planning_structured_error=planning_structured_error,
+                    remember=self._remember,
+                    get_request=self.get_request,
+                    project_service=self.project_service,
+                    persist_outputs_for_record=self._persist_outputs_for_record,
+                    persist_outputs=bool(self.config.persist_outputs),
+                    json_safe=_json_safe,
+                    redact_sensitive_json=_redact_sensitive_json,
+                    query_spec_to_dict_func=query_spec_to_dict,
+                )
+
+                return production_response
+
+            except (
+                LLMSpecGenerationError,
+                PlanningError,
+                DagValidationError,
+                DagExecutionError,
+                ValueError,
+                RuntimeError,
+                Exception,
+            ) as exc:
+                from orchestrator.planning.error_mapping import (
+                    planning_exception_to_structured_error,
+                )
+
+                planning_structured_error = planning_exception_to_structured_error(
+                    exc,
+                    source="orchestrator_service",
+                    stage="query_spec_planning",
+                )
+
+                final_metadata["query_spec_planning_enabled"] = True
+                final_metadata["planning_attempted"] = True
+                final_metadata["planning_error"] = str(exc)
+                final_metadata["planning_structured_error"] = planning_structured_error
+                return self._planning_failure_response(
+                    query=query,
+                    final_request_id=final_request_id,
+                    final_metadata=final_metadata,
+                    exc=exc,
+                    planning_structured_error=planning_structured_error,
+                )
+
+    def _orchestrator_context(self) -> Any | None:
+        """
+        Return the owning orchestrator/context object when available.
+
+        QueryExecutionService intentionally keeps backward compatibility with
+        tests/extensions that monkeypatch query helper methods on
+        OrchestratorService.  The exact attribute name is kept defensive because
+        this service is used as an extraction layer.
+        """
+        for attr_name in (
+            "context",
+            "_context",
+            "orchestrator",
+            "_orchestrator",
+            "owner",
+            "_owner",
+        ):
+            owner = getattr(self, attr_name, None)
+            if owner is not None and owner is not self:
+                return owner
+
+        return None
+
+    def _maybe_plan_llm_intent(
+        self,
+        query: str,
+    ) -> dict[str, Any] | None:
+        """
+        Best-effort LLM intent planning. Never breaks the pipeline.
+
+        Backward compatibility:
+        tests/extensions may monkeypatch OrchestratorService._maybe_plan_llm_intent.
+        When such an override exists on the owning context, honor it before
+        using the extracted service implementation.
+        """
+        owner = self._orchestrator_context()
+        owner_method = getattr(owner, "_maybe_plan_llm_intent", None) if owner is not None else None
+
+        if callable(owner_method):
+            owner_method_func = getattr(owner_method, "__func__", None)
+            current_method_func = getattr(type(owner), "_maybe_plan_llm_intent", None)
+
+            # If the owner method is not the class-level delegating method, it
+            # is likely an instance monkeypatch/override and should be honored.
+            if owner_method_func is None or owner_method_func is not current_method_func:
+                try:
+                    planned_intent = owner_method(query)
+                except Exception:
+                    planned_intent = None
+
+                if isinstance(planned_intent, dict):
+                    return planned_intent
+
+        if not self._llm_planning_enabled():
+            return None
+
+        try:
+            planned = self.plan_intent_with_llm(query)
+        except QueryExecutionServiceError:
+            return None
+        except Exception:
+            return None
+
+        if not isinstance(planned, dict):
+            return None
+
+        return planned.get("intent")
+
+    @staticmethod
+    def _apply_intent_to_query(
+        query: str,
+        intent: dict[str, Any] | None,
+    ) -> str:
+        return apply_intent_to_query(query, intent)
+
+
+
+    def plan_intent_with_llm(
+        self,
+        query: str,
+    ) -> dict[str, Any]:
+        """
+        Plan geospatial query intent using the configured LLM.
+
+        This method does not execute plugins.
+        """
+        capability_names = self._enabled_capability_names()
+
+        try:
+            return run_llm_intent_planner(
+                query=query,
+                available_capabilities=capability_names,
+            )
+        except LLMIntentAdapterError as exc:
+            raise QueryExecutionServiceError(str(exc)) from exc
+
+
+
+    def _try_handle_system_status_query(
+        self,
+        *,
+        query: str,
+        inputs: dict[str, Any],
+        final_request_id: str,
+        final_metadata: dict[str, Any],
+        band_map: dict[str, int] | None = None,
+        user_context: dict[str, Any] | None = None,
+        llm_intent: Any | None = None,
+    ) -> dict[str, Any] | None:
+        return try_handle_system_status_query(
+            self,
+            query=query,
+            inputs=inputs,
+            final_request_id=final_request_id,
+            final_metadata=final_metadata,
+            band_map=band_map,
+            user_context=user_context,
+            llm_intent=llm_intent,
+            json_safe=_json_safe,
+        )
+
+
+
+    def _is_system_status_query(
+        self,
+        query: str,
+        llm_intent: Any | None = None,
+    ) -> bool:
+        return is_system_status_query(query, llm_intent)
+
+
+
+    @staticmethod
+    def _is_vector_display_query(
+        query: str,
+        intent: dict[str, Any] | None = None,
+    ) -> bool:
+        return is_vector_display_query(query, intent)
+
+
+
+    @staticmethod
+    def _is_vector_summary_query(
+        query: str,
+        intent: dict[str, Any] | None = None,
+    ) -> bool:
+        return is_vector_summary_query(query, intent)
+
+
+
+    @staticmethod
+    def _read_geojson_path_if_possible(value: Any) -> dict[str, Any] | None:
+        return read_geojson_path_if_possible(value)
+
+
+
+    @classmethod
+    def _find_geojson_like(
+        cls,
+        obj: Any,
+        *,
+        max_depth: int = 8,
+    ) -> dict[str, Any] | None:
+        return find_geojson_like(obj, max_depth=max_depth)
+
+
+
+    @staticmethod
+    def _summarize_feature_collection(
+        feature_collection: dict[str, Any],
+    ) -> dict[str, Any]:
+        return summarize_feature_collection(feature_collection)
+
+
+
+    def _try_handle_vector_display_directly(
+        self,
+        *,
+        query: str,
+        inputs: dict[str, Any],
+        resolved_inputs: dict[str, Any],
+        final_request_id: str,
+        final_metadata: dict[str, Any],
+        band_map: dict[str, int] | None = None,
+        user_context: dict[str, Any] | None = None,
+        llm_intent: dict[str, Any] | None = None,
+    ) -> dict[str, Any] | None:
+        return try_handle_vector_display_directly(
+            query=query,
+            inputs=inputs,
+            resolved_inputs=resolved_inputs,
+            final_request_id=final_request_id,
+            final_metadata=final_metadata,
+            band_map=band_map,
+            user_context=user_context,
+            llm_intent=llm_intent,
+            build_enabled_router=getattr(self, "_build_enabled_router"),
+            remember=self._remember,
+            json_safe=_json_safe,
+        )
+
+    @staticmethod
+    def _new_request_id() -> str:
+        return f"req-{uuid.uuid4()}"
+
+    def _resolve_input_references(
+        self,
+        inputs: dict[str, Any],
+    ) -> dict[str, Any]:
+        """
+        Resolve uploaded input references through UploadReferenceResolver.
+
+        Supported:
+            {"raster_ref": "upl-..."}
+            {"vector_ref": "upl-..."}
+            {"raster": {"upload_id": "upl-..."}}
+            {"vector": {"upload_id": "upl-..."}}
+        """
+        try:
+            return self.upload_reference_resolver.resolve_inputs(inputs)
+        except UploadReferenceResolverError as exc:
+            raise _service_error_from_exception(
+                exc,
+                stage="resolve_input_references",
+            ) from exc
+
+    def handle_query(
+            self,
+            *,
+            query: str,
+            inputs: dict[str, Any],
+            band_map: dict[str, int] | None = None,
+            request_id: str | None = None,
+            user_context: dict[str, Any] | None = None,
+            metadata: dict[str, Any] | None = None,
+            min_score: float | None = None,
+            project_id: str | None = None,
+        ) -> dict[str, Any]:
+            """
+            Execute a real user query and return production response dict.
+
+            This is the main method API/Frontend should use.
+            """
+            # self._new_request_id(), self._maybe_plan_llm_intent(query),
+            # self._apply_intent_to_query(query, llm_intent), and self._llm_planning_enabled()
+            # are delegated to query_execution.natural_query_context.
+            natural_query_context = prepare_natural_query_context(
+                query=query,
+                request_id=request_id,
+                user_context=user_context,
+                metadata=metadata,
+                project_id=project_id,
+                use_weighted_router=self.config.use_weighted_router,
+                new_request_id=self._new_request_id,
+                maybe_plan_llm_intent=self._maybe_plan_llm_intent,
+                apply_intent_to_query=self._apply_intent_to_query,
+                llm_planning_enabled=self._llm_planning_enabled,
+                json_safe=_json_safe,
+            )
+            final_request_id = natural_query_context["final_request_id"]
+            final_metadata = natural_query_context["final_metadata"]
+            _resolved_project_id = natural_query_context["resolved_project_id"]
+            llm_intent = natural_query_context["llm_intent"]
+            effective_query = natural_query_context["effective_query"]
+            effective_query = self._apply_intent_to_query(query, llm_intent)
+
+            final_metadata["llm_planning_enabled"] = self._llm_planning_enabled()
+            if llm_intent is not None:
+                final_metadata["llm_intent"] = _json_safe(llm_intent)
+                final_metadata["original_query"] = query
+                final_metadata["effective_query"] = effective_query
+
+            status_guard_response = self._try_handle_system_status_query(
+                query=query,
+                inputs=inputs,
+                final_request_id=final_request_id,
+                final_metadata=final_metadata,
+                band_map=band_map,
+                user_context=user_context,
+                llm_intent=llm_intent,
+            )
+
+            if status_guard_response is not None:
+                return status_guard_response
+
+            try:
+                # self._build_router(), self._resolve_input_references(inputs),
+                # try_dispatch_direct_query_response,
+                # run_natural_query_with_routing_evidence, response_builder.build_dict,
+                # and persist_natural_query_record are delegated
+                # to query_execution.natural_query_execution.
+                return execute_and_persist_natural_query_success_path(
+                    query=query,
+                    effective_query=effective_query,
+                    inputs=inputs,
+                    band_map=band_map,
+                    user_context=user_context,
+                    metadata=metadata,
+                    min_score=min_score,
+                    final_request_id=final_request_id,
+                    final_metadata=final_metadata,
+                    project_id=_resolved_project_id,
+                    llm_intent=llm_intent,
+                    config_min_score=self.config.min_score,
+                    persist_outputs=bool(self.config.persist_outputs),
+                    response_builder=self.response_builder,
+                    project_service=self.project_service,
+                    build_router=self._build_router,
+                    resolve_input_references=self._resolve_input_references,
+                    natural_query_runner=run_natural_query_with_routing_evidence,
+                    preflight_direct_response_handler=lambda **kwargs: handle_default_preflight_direct_response(**kwargs, remember=self._remember, attach_request=self.project_service.attach_request, json_safe=_json_safe),
+                    direct_response_handler=lambda **kwargs: handle_default_direct_response(**kwargs, llm_planning_enabled=self._llm_planning_enabled),
+                    vector_display_handler=self._try_handle_vector_display_directly,
+                    query_spec_planning_enabled=self._query_spec_planning_enabled,
+                    query_spec_planning_handler=self._try_handle_query_with_planning,
+                    remember=self._remember,
+                    get_request=self.get_request,
+                    persist_outputs_for_record=self._persist_outputs_for_record,
+                    json_safe=_json_safe,
+                )
+
+            except Exception as exc:
+                # _service_exception_to_structured_error, response_builder.build_dict,
+                # structured_error metadata, and failed _remember are delegated
+                # to query_execution.natural_query_failure.
+                return build_and_persist_failed_natural_query_response(
+                    exc=exc,
+                    request_id=final_request_id,
+                    query=query,
+                    inputs=inputs,
+                    band_map=band_map,
+                    user_context=user_context,
+                    final_metadata=final_metadata,
+                    project_id=_resolved_project_id,
+                    response_builder=self.response_builder,
+                    remember=self._remember,
+                    json_safe=_json_safe,
+                    service_exception_to_structured_error=_service_exception_to_structured_error,
+                )

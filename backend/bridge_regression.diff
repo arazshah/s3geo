@@ -1,0 +1,75 @@
+--- orchestrator/planning/kernel_execution_bridge.py.before_regression_01.20260717_101956.bak	2026-07-05 16:24:07.458391056 +0330
++++ orchestrator/planning/kernel_execution_bridge.py	2026-07-17 13:49:56.793145147 +0330
+@@ -110,53 +110,6 @@
+     return summary
+ 
+ 
+-def _filter_kwargs_for_callable(
+-    capability_fn: Callable[..., Any],
+-    kwargs: dict[str, Any],
+-) -> tuple[dict[str, Any], dict[str, Any]]:
+-    """
+-    Filter runtime kwargs against the real callable signature.
+-
+-    The kernel bridge must be defensive because QueryPlan parameters may
+-    originate from LLM-generated QuerySpec params. Unsupported kwargs are
+-    dropped unless the callable explicitly accepts **kwargs.
+-    """
+-    try:
+-        signature = inspect.signature(capability_fn)
+-    except (TypeError, ValueError):
+-        return dict(kwargs), {}
+-
+-    accepts_var_kwargs = any(
+-        param.kind == inspect.Parameter.VAR_KEYWORD
+-        for param in signature.parameters.values()
+-    )
+-    if accepts_var_kwargs:
+-        return dict(kwargs), {}
+-
+-    allowed = {
+-        name
+-        for name, param in signature.parameters.items()
+-        if param.kind in (
+-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+-            inspect.Parameter.KEYWORD_ONLY,
+-        )
+-    }
+-
+-    filtered = {
+-        key: value
+-        for key, value in kwargs.items()
+-        if key in allowed
+-    }
+-    dropped = {
+-        key: value
+-        for key, value in kwargs.items()
+-        if key not in allowed
+-    }
+-
+-    return filtered, dropped
+-
+-
+-
+ def _artifact_kind_for_step(step: PlanStep, value: Any) -> str:
+     produces = step.metadata.get("produces")
+     if isinstance(produces, str) and produces:
+@@ -489,18 +442,6 @@
+         for param_name, artifact in inputs.items():
+             kwargs[param_name] = artifact_to_value(artifact)
+ 
+-        kwargs, dropped_kwargs = _filter_kwargs_for_callable(
+-            capability_fn,
+-            kwargs,
+-        )
+-        if dropped_kwargs:
+-            context.metadata.setdefault("dropped_unsupported_capability_kwargs", {})[
+-                step.id
+-            ] = {
+-                "capability_name": step.metadata.get("capability_name") or step.name,
+-                "dropped_keys": sorted(str(key) for key in dropped_kwargs.keys()),
+-            }
+-
+         output = capability_fn(**kwargs)
+         if inspect.isawaitable(output):
+             output = await output

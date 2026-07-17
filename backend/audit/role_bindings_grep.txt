@@ -1,0 +1,21 @@
+smart_spatial_system/application/services/query_execution_service.py:656:            structured_error["code"] = "planning.missing_input_roles"
+smart_spatial_system/application/services/query_execution/planning_context.py:110:def _normalize_input_roles(
+smart_spatial_system/application/services/query_execution/planning_context.py:121:      - context.input_roles.source / target          -> user_context
+smart_spatial_system/application/services/query_execution/planning_context.py:122:      - context.role_bindings.source / target        -> user_context
+smart_spatial_system/application/services/query_execution/planning_context.py:124:      - metadata.input_roles / metadata.role_bindings
+smart_spatial_system/application/services/query_execution/planning_context.py:150:    # 2) context.input_roles / metadata.input_roles.
+smart_spatial_system/application/services/query_execution/planning_context.py:152:        input_roles = _as_mapping(container.get("input_roles"))
+smart_spatial_system/application/services/query_execution/planning_context.py:153:        set_role("source", input_roles.get("source"))
+smart_spatial_system/application/services/query_execution/planning_context.py:154:        set_role("target", input_roles.get("target"))
+smart_spatial_system/application/services/query_execution/planning_context.py:156:    # 3) context.role_bindings / metadata.role_bindings.
+smart_spatial_system/application/services/query_execution/planning_context.py:158:        role_bindings = _as_mapping(container.get("role_bindings"))
+smart_spatial_system/application/services/query_execution/planning_context.py:159:        set_role("source", role_bindings.get("source"))
+smart_spatial_system/application/services/query_execution/planning_context.py:160:        set_role("target", role_bindings.get("target"))
+smart_spatial_system/application/services/query_execution/planning_context.py:190:    resolved_input_roles = _normalize_input_roles(
+smart_spatial_system/application/services/query_execution/planning_context.py:202:        "input_roles": {
+smart_spatial_system/application/services/query_execution/planning_context.py:204:            for role, ref in resolved_input_roles.items()
+smart_spatial_system/application/services/query_execution/planning_context.py:207:        "role_bindings": resolved_input_roles,
+smart_spatial_system/application/services/query_execution/planning_context.py:208:        "resolved_input_roles": resolved_input_roles,
+smart_spatial_system/application/services/query_execution/planning_context.py:279:        "resolved_input_roles": resolved_input_roles,
+smart_spatial_system/application/services/query_execution/planning_context.py:282:    if resolved_input_roles:
+smart_spatial_system/application/services/query_execution/planning_context.py:283:        metadata_updates["resolved_input_role_names"] = sorted(resolved_input_roles.keys())

@@ -1,0 +1,111 @@
+
+    return {
+        "feature_count": len(features),
+        "geometry_types": geometry_types,
+        "bounds": _merge_bbox_arrays(bboxes),
+    }
+
+
+@capability(
+    name="find_nearest_neighbors",
+    keywords=[
+        "nearest neighbor",
+        "nearest neighbours",
+        "nearest feature",
+        "closest feature",
+        "k nearest",
+        "knn",
+        "proximity",
+        "find closest",
+        "نزدیکترین همسایه",
+        "نزدیک‌ترین همسایه",
+        "نزدیکترین عارضه",
+        "نزدیک‌ترین عارضه",
+        "k نزدیکترین",
+        "تحلیل مجاورت",
+    ],
+    description="Find k nearest target features for each source vector feature.",
+    required_inputs=["source_features", "target_features"],
+    optional_inputs=[
+        "k",
+        "max_distance",
+        "engine",
+        "precision",
+        "drop_unmatched",
+        "include_target_geometry",
+        "source_crs",
+        "metadata",
+    ],
+    output_kind="vector",
+    permissions=[],
+    metadata={
+        "category": "analysis",
+        "data_type": "vector",
+        "operation": "nearest_neighbor",
+        "returns": "VectorOut",
+        "artifact_kind": "features",
+        "access_scope": "spatial_analysis",
+        "config_aware": True,
+        "requires_shapely_for_robust_geometry": True,
+        "planar_only": True,
+        "routable": True,
+    },
+)
+def find_nearest_neighbors(
+    source_features: Any,
+    target_features: Any,
+    k: int | None = None,
+    max_distance: float | None = None,
+    engine: str | None = None,
+    precision: int | None = None,
+    drop_unmatched: bool | None = None,
+    include_target_geometry: bool | None = None,
+    source_crs: str | None = None,
+    metadata: dict[str, Any] | None = None,
+) -> VectorOut:
+    """
+    Find k nearest target features for each source feature.
+
+    Args:
+        source_features:
+            Source VectorOut, FeatureCollection, Feature, or list[Feature].
+        target_features:
+            Target VectorOut, FeatureCollection, Feature, or list[Feature].
+        k:
+            Number of nearest targets per source.
+        max_distance:
+            Optional maximum accepted distance.
+        engine:
+            auto | shapely | python.
+        precision:
+            Rounding precision for distance.
+        drop_unmatched:
+            If True, unmatched source features are removed.
+        include_target_geometry:
+            If True, target geometry is copied into output properties.
+        source_crs:
+            CRS hint. Used only for warning metadata.
+        metadata:
+            Optional metadata to merge.
+
+    Returns:
+        VectorOut containing one output feature per matched neighbor.
+    """
+    config = _load_nearest_config()
+
+    final_engine = _validate_engine(
+        str(pick_first(engine, config.get("default_engine"), default="auto"))
+    )
+
+    max_k_config = config.get("max_k", 100)
+    max_k = None if max_k_config is None else int(max_k_config)
+
+    final_k = _validate_k(
+        pick_first(k, config.get("default_k"), default=1),
+        max_k=max_k,
+    )
+
+    final_max_distance = _validate_max_distance(max_distance)
+
+    final_precision = _configured_precision(config) if precision is None else precision
+    if final_precision is not None:

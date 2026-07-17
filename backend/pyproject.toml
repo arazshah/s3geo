@@ -1,0 +1,80 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smart-spatial-system"
+version = "0.1.0"
+description = "Smart Spatial System API and orchestration runtime for natural geospatial query execution."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "python-dotenv",
+    "httpx",
+    "requests",
+    "PyYAML",
+    "pydantic",
+    "jinja2",
+    "networkx",
+    "python-multipart",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+    "api*",
+    "orchestrator*",
+    "plugins*",
+    "smart_spatial_system*",
+    "geochat_sdk*",
+    "geochat_kernel*",
+]
+exclude = [
+    "tests*",
+    "frontend*",
+    "artifacts*",
+    "outputs*",
+    "uploads*",
+    "data*",
+    "projects*",
+    "var*",
+    "cache*",
+    "docs*",
+    "examples*",
+    "scripts*",
+    "tools*",
+    "templates*",
+    "secrets*",
+    "output*",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "httpx",
+    "setuptools>=68",
+    "wheel",
+]
+geo = [
+    "numpy",
+    "pandas",
+    "shapely",
+    "pyproj",
+    "geopandas",
+    "rasterio",
+]
+postgis = [
+    "psycopg2-binary",
+    "psycopg[binary]",
+]
+pdf = [
+    "jinja2",
+    "weasyprint",
+]
+
+[project.urls]
+Homepage = "https://example.com/smart-spatial-system"

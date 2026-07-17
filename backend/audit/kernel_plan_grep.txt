@@ -1,0 +1,38 @@
+smart_spatial_system/application/services/query_execution/planning_response.py:23:    from orchestrator.planning.kernel_plan_adapter import kernel_plan_to_summary
+smart_spatial_system/application/services/query_execution/planning_response.py:27:    kernel_plan_summary = kernel_plan_to_summary(
+smart_spatial_system/application/services/query_execution/planning_response.py:28:        getattr(planning_result, "kernel_plan", None)
+smart_spatial_system/application/services/query_execution/planning_response.py:81:            "kernel_plan": kernel_plan_summary,
+smart_spatial_system/application/services/query_execution/planning_response.py:125:        "kernel_plan": kernel_plan_summary,
+orchestrator/planning/kernel_plan_adapter.py:2:orchestrator.planning.kernel_plan_adapter
+orchestrator/planning/kernel_plan_adapter.py:135:    datasource_ids = node.metadata.get("datasource_ids", [])
+orchestrator/planning/kernel_plan_adapter.py:136:    if isinstance(datasource_ids, str):
+orchestrator/planning/kernel_plan_adapter.py:137:        datasource_ids = [datasource_ids]
+orchestrator/planning/kernel_plan_adapter.py:138:    if not isinstance(datasource_ids, list):
+orchestrator/planning/kernel_plan_adapter.py:139:        datasource_ids = []
+orchestrator/planning/kernel_plan_adapter.py:158:        datasource_ids=[
+orchestrator/planning/kernel_plan_adapter.py:160:            for item in datasource_ids
+orchestrator/planning/kernel_plan_adapter.py:249:def kernel_plan_to_summary(plan: QueryPlan | None) -> dict[str, Any] | None:
+orchestrator/planning/kernel_plan_adapter.py:269:                "input_names": sorted(step.input_map.keys()),
+orchestrator/planning/kernel_plan_adapter.py:270:                "input_sources": dict(step.input_map),
+orchestrator/planning/kernel_plan_adapter.py:272:                "datasource_ids": list(step.datasource_ids),
+orchestrator/planning/kernel_execution_bridge.py:11:orchestrator.planning.kernel_plan_adapter.
+orchestrator/planning/kernel_execution_bridge.py:470:async def execute_kernel_plan_with_capabilities(
+orchestrator/planning/kernel_execution_bridge.py:491:    context.metadata.setdefault("kernel_plan_id", query_plan.id)
+orchestrator/planning/kernel_execution_bridge.py:572:def execute_kernel_plan_with_capabilities_sync(
+orchestrator/planning/kernel_execution_bridge.py:586:        execute_kernel_plan_with_capabilities(
+orchestrator/planning/kernel_execution_bridge.py:689:                "kernel_plan_id": result.context.metadata.get("kernel_plan_id"),
+orchestrator/planning/runner.py:38:    execute_kernel_plan_with_capabilities_sync,
+orchestrator/planning/runner.py:40:from orchestrator.planning.kernel_plan_adapter import dag_plan_to_query_plan
+orchestrator/planning/runner.py:56:    kernel_plan:
+orchestrator/planning/runner.py:71:    kernel_plan: QueryPlan | None = None
+orchestrator/planning/runner.py:127:    def build_kernel_plan(
+orchestrator/planning/runner.py:152:        kernel_plan = self.build_kernel_plan(plan)
+orchestrator/planning/runner.py:164:            kernel_plan=kernel_plan,
+orchestrator/planning/runner.py:185:        kernel_plan = self.build_kernel_plan(plan)
+orchestrator/planning/runner.py:194:        kernel_execution = execute_kernel_plan_with_capabilities_sync(
+orchestrator/planning/runner.py:195:            kernel_plan,
+orchestrator/planning/runner.py:205:            kernel_plan=kernel_plan,
+geochat_kernel/models/query_plan.py:30:    datasource_ids: list[str] = Field(default_factory=list)
+geochat_kernel/errors/kernel_errors.py:150:    code: ClassVar[str] = "kernel_planning_error"
+geochat_kernel/errors/kernel_errors.py:161:    code: ClassVar[str] = "kernel_plan_execution_error"
+geochat_kernel/runtime/plan_executor.py:100:                "input_names": list(inputs.keys()),

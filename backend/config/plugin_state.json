@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "plugins": {
+    "zonal_statistics": {
+      "enabled": true
+    },
+    "area_perimeter_calc": {
+      "enabled": true
+    },
+    "buffer_analysis": {
+      "enabled": true
+    }
+  }
+}
