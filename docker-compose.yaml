@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: deploy/backend.Dockerfile
-    container_name: s3geo-backend
     restart: unless-stopped
     env_file:
       - .env
@@ -14,8 +13,8 @@ services:
       - smart_spatial_runtime:/app/var
     expose:
       - "8000"
-    ports:
-      - "${BACKEND_PORT:-8000}:8000"
+    # Backend is available internally through the Docker network.
+    # Public access should be configured through Coolify.
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/v1/health"]
       interval: 30s
@@ -31,7 +30,6 @@ services:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080}
         VITE_API_RUN_PATH: ${VITE_API_RUN_PATH:-/api/v1/query}
         VITE_API_PREVIEW_PATH: ${VITE_API_PREVIEW_PATH:-/api/v1/planner/intent}
-    container_name: s3geo-frontend
     restart: unless-stopped
     depends_on:
       backend:
