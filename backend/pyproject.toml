@@ -60,7 +60,7 @@ dev = [
     "wheel",
 ]
 geo = [
-    "numpy",
+    "numpy==1.26.4",
     "pandas",
     "shapely",
     "pyproj",
