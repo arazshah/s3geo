@@ -904,6 +904,45 @@ OP_CATALOG: dict[str, OpDescriptor] = {
         ),
     ),
 
+    # Geometry validation is implemented by the geometry_validator plugin.
+    # Keep the singular spelling as a compatibility alias because older LLM
+    # query-spec prompts emitted ``validate_geometry``.
+    "validate_geometries": OpDescriptor(
+        op_name="validate_geometries",
+        capability_name="validate_geometries",
+        input_map={
+            "vector": "features",
+        },
+        input_types={
+            "vector": "vector",
+        },
+        param_map={
+            "engine": "engine",
+            "drop_invalid": "drop_invalid",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes="Validate vector feature geometries and report invalid features.",
+    ),
+
+    "validate_geometry": OpDescriptor(
+        op_name="validate_geometry",
+        capability_name="validate_geometries",
+        input_map={
+            "vector": "features",
+        },
+        input_types={
+            "vector": "vector",
+        },
+        param_map={
+            "engine": "engine",
+            "drop_invalid": "drop_invalid",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes="Compatibility alias for validate_geometries.",
+    ),
+
     "summarize_vector": OpDescriptor(
         op_name="summarize_vector",
         capability_name="summarize_vector_layer",

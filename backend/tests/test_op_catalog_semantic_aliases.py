@@ -37,6 +37,14 @@ def test_display_summary_export_aliases_exist():
     assert OP_CATALOG["export_geojson"].capability_name == "export_vector_geojson"
 
 
+def test_geometry_validation_aliases_reference_registered_capability():
+    assert is_supported("validate_geometries")
+    assert is_supported("validate_geometry")
+    assert OP_CATALOG["validate_geometries"].capability_name == "validate_geometries"
+    assert OP_CATALOG["validate_geometry"].capability_name == "validate_geometries"
+    assert OP_CATALOG["validate_geometry"].input_map["vector"] == "features"
+
+
 def test_buffer_alias_exists():
     assert is_supported("buffer")
     op = OP_CATALOG["buffer"]
