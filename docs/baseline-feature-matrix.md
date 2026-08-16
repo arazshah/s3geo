@@ -1,4 +1,4 @@
-# Phase 2 feature matrix
+# Phase 2 baseline feature matrix (with Phase 3B re-verification)
 
 All runtime observations use the isolated server configuration documented in [baseline-environment.md](baseline-environment.md).
 
@@ -8,6 +8,7 @@ All runtime observations use the isolated server configuration documented in [ba
 | Vector upload | `POST /api/v1/uploads/vector` for both Austria sample GeoJSON files | 2 uploads accepted and persisted in temporary runtime storage | confirmed working |
 | Upload discovery | `GET /api/v1/uploads` | 2 uploads listed | confirmed working |
 | Direct vector display | `POST /api/v1/query` with `inputs.vector_ref` and `show vector features` | success: 3 features, GeoJSON and map layers returned | confirmed working, partial |
+| Selected-upload vector display (Phase 3B) | Browser upload + one AI Query selection sent as `data_source_ids` | success; frontend renders 2 visible GeoJSON layers; deterministic request bypasses LLM intent planning | confirmed working, narrow vertical slice |
 | Map-layer retrieval | `GET /api/v1/requests/{id}/map-layers` | 2 layers returned (`austria_candidate_areas`, `active_vector`) | confirmed working; duplicate semantic layer risk |
 | Output file manifest after direct vector display | `GET /api/v1/requests/{id}/outputs/files` | HTTP 404 | confirmed missing for this successful path |
 | Area/perimeter explicit request | query with `inputs.vector_ref` | HTTP 200 payload but `status=failed`; planner demands `threshold_raster` | confirmed failed |
@@ -18,7 +19,7 @@ All runtime observations use the isolated server configuration documented in [ba
 | Frontend ↔ backend data discovery | browser AI Query workspace | uploads visible; 2 datasets available | confirmed working |
 | Frontend project creation/details | browser Projects workspace | project created and detail route loaded | confirmed working |
 | Frontend project selection for AI query | browser after project creation | selector remains disabled: “No projects loaded” | confirmed failed |
-| Frontend run of direct vector phrase | browser submits dataset ID via `data_source_ids` | failed, missing raster capabilities; no map layer | confirmed failed contract integration |
+| Frontend run of direct vector phrase | browser submits dataset ID via `data_source_ids` | Phase 2 failed because the backend ignored the selection; Phase 3B normalization now binds one valid selected GeoJSON as `vector_ref` | superseded by the Phase 3B confirmed narrow slice |
 | Docker Compose config/startup | `docker-compose config` | blocked because root `.env` missing; no containers started | blocked by prerequisite |
 
 “Working” means that one observed path returned the expected immediate response. It does not establish production reliability, correctness of geospatial results, persistence across restart, or LLM/PostGIS behavior.

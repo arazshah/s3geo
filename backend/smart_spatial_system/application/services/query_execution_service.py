@@ -1099,6 +1099,21 @@ class QueryExecutionService:
             # self._new_request_id(), self._maybe_plan_llm_intent(query),
             # self._apply_intent_to_query(query, llm_intent), and self._llm_planning_enabled()
             # are delegated to query_execution.natural_query_context.
+            deterministic_vector_display = (
+                isinstance(inputs.get("vector_ref"), str)
+                and bool(inputs.get("vector_ref", "").strip())
+                and self._is_vector_display_query(query)
+            )
+            maybe_plan_llm_intent = (
+                (lambda _query: None)
+                if deterministic_vector_display
+                else self._maybe_plan_llm_intent
+            )
+            llm_planning_enabled = (
+                (lambda: False)
+                if deterministic_vector_display
+                else self._llm_planning_enabled
+            )
             natural_query_context = prepare_natural_query_context(
                 query=query,
                 request_id=request_id,
@@ -1107,9 +1122,9 @@ class QueryExecutionService:
                 project_id=project_id,
                 use_weighted_router=self.config.use_weighted_router,
                 new_request_id=self._new_request_id,
-                maybe_plan_llm_intent=self._maybe_plan_llm_intent,
+                maybe_plan_llm_intent=maybe_plan_llm_intent,
                 apply_intent_to_query=self._apply_intent_to_query,
-                llm_planning_enabled=self._llm_planning_enabled,
+                llm_planning_enabled=llm_planning_enabled,
                 json_safe=_json_safe,
             )
             final_request_id = natural_query_context["final_request_id"]
@@ -1119,7 +1134,9 @@ class QueryExecutionService:
             effective_query = natural_query_context["effective_query"]
             effective_query = self._apply_intent_to_query(query, llm_intent)
 
-            final_metadata["llm_planning_enabled"] = self._llm_planning_enabled()
+            final_metadata["llm_planning_enabled"] = llm_planning_enabled()
+            if deterministic_vector_display:
+                final_metadata["llm_planning_skipped"] = "deterministic_vector_display"
             if llm_intent is not None:
                 final_metadata["llm_intent"] = _json_safe(llm_intent)
                 final_metadata["original_query"] = query

@@ -183,6 +183,10 @@ function extractErrorMessage(data: unknown, fallback: string) {
         return detail;
       }
 
+      if (isRecord(detail) && typeof detail.message === "string") {
+        return detail.message;
+      }
+
       return JSON.stringify(detail);
     }
 

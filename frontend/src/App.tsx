@@ -638,12 +638,27 @@ function unwrapApiPayload<T = unknown>(value: T): T {
     return value.data as T;
   }
 
-  for (const key of ["payload", "result", "body"]) {
+  for (const key of ["payload", "body"]) {
     const nested = value[key];
 
     if (isRecord(nested)) {
       return nested as T;
     }
+  }
+
+  // Successful vector-display responses use ``result`` as a domain output
+  // while retaining request_id, metadata, outputs and layers at the root.
+  // Treating every ``result`` object as an envelope drops the map contract.
+  const result = value.result;
+  const hasResponseContract =
+    "status" in value ||
+    "request_id" in value ||
+    "layers" in value ||
+    "map_layers" in value ||
+    "outputs" in value;
+
+  if (isRecord(result) && !hasResponseContract) {
+    return result as T;
   }
 
   return value;

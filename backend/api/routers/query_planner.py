@@ -10,6 +10,10 @@ from api.support import (
     json_safe as _json_safe,
     service as _service,
 )
+from api.query_request_normalization import (
+    QueryRequestNormalizationError,
+    normalize_query_inputs,
+)
 from orchestrator.service import OrchestratorServiceError
 
 
@@ -56,6 +60,18 @@ class QueryRequest(BaseModel):
     project_id: str | None = Field(
         default=None,
         description="Optional project identifier.",
+    )
+    datasets: list[str] | None = Field(
+        default=None,
+        description="Legacy selected dataset IDs accepted for compatibility.",
+    )
+    dataset_ids: list[str] | None = Field(
+        default=None,
+        description="Selected dataset IDs accepted for compatibility.",
+    )
+    data_source_ids: list[str] | None = Field(
+        default=None,
+        description="Frontend-selected data source IDs.",
     )
 
     model_config = ConfigDict(extra="allow")
@@ -379,16 +395,32 @@ def query_endpoint(
             detail="'min_score' must be numeric when provided.",
         )
 
+    try:
+        normalized_request = normalize_query_inputs(
+            query=query_text,
+            inputs=inputs,
+            data_source_ids=body_payload.get("data_source_ids"),
+            dataset_ids=body_payload.get("dataset_ids"),
+            datasets=body_payload.get("datasets"),
+            upload_storage=getattr(svc, "upload_storage", None),
+        )
+    except QueryRequestNormalizationError as exc:
+        raise HTTPException(status_code=400, detail=exc.to_public_detail()) from exc
+
+    normalized_metadata = dict(metadata)
+    if normalized_request.metadata["request_shape"] != "legacy_or_unselected":
+        normalized_metadata["query_request_normalization"] = normalized_request.metadata
+
     response = svc.handle_query(
         query=query_text,
-        inputs=inputs,
+        inputs=normalized_request.inputs,
         band_map={
             str(key): int(value)
             for key, value in band_map.items()
         },
         request_id=body_payload.get("request_id"),
         user_context=user_context,
-        metadata=metadata,
+        metadata=normalized_metadata,
         min_score=float(min_score) if min_score is not None else None,
         project_id=str(body_payload.get("project_id") or "").strip() or None,
     )
@@ -478,4 +510,3 @@ def feedback_endpoint(
         ) from exc
 
     return _json_safe(payload)
-
