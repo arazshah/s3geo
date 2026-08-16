@@ -3,9 +3,19 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
+from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
+
 
 def _pyproject() -> dict:
     return tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+
+
+def _requirement_names(requirements: list[str]) -> set[str]:
+    return {
+        canonicalize_name(Requirement(requirement).name)
+        for requirement in requirements
+    }
 
 
 def test_runtime_dependencies_cover_api_and_config_imports() -> None:
@@ -34,22 +44,22 @@ def test_optional_dependencies_cover_geo_pdf_and_postgis_imports() -> None:
     data = _pyproject()
     extras = data["project"]["optional-dependencies"]
 
-    geo = set(extras["geo"])
+    geo = _requirement_names(extras["geo"])
     assert {
-        "numpy",
-        "pandas",
-        "shapely",
-        "pyproj",
-        "geopandas",
-        "rasterio",
+        canonicalize_name("numpy"),
+        canonicalize_name("pandas"),
+        canonicalize_name("shapely"),
+        canonicalize_name("pyproj"),
+        canonicalize_name("geopandas"),
+        canonicalize_name("rasterio"),
     } <= geo
 
-    postgis = set(extras["postgis"])
-    assert "psycopg2-binary" in postgis
-    assert "psycopg[binary]" in postgis
+    postgis = _requirement_names(extras["postgis"])
+    assert canonicalize_name("psycopg2-binary") in postgis
+    assert canonicalize_name("psycopg") in postgis
 
-    pdf = set(extras["pdf"])
-    assert {"jinja2", "weasyprint"} <= pdf
+    pdf = _requirement_names(extras["pdf"])
+    assert {canonicalize_name("jinja2"), canonicalize_name("weasyprint")} <= pdf
 
 
 def test_local_sdk_and_kernel_packages_are_included_in_package_discovery() -> None:

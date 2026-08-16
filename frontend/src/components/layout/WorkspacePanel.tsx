@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -4686,14 +4686,18 @@ function WeightsManagerPanel({
   const [proposalReason, setProposalReason] = useState("Updated from frontend scoring manager");
 
   useEffect(() => {
-    const nextDraft = cloneJsonValue(weightsPayload);
-    setDraft(nextDraft);
-    setAdvancedJson(JSON.stringify(nextDraft, null, 2));
-    setOperationState("idle");
-    setOperationMessage("");
-    setReloadResponse(null);
-    setSaveResponse(null);
-    setProposalResponse(null);
+    const resetId = window.setTimeout(() => {
+      const nextDraft = cloneJsonValue(weightsPayload);
+      setDraft(nextDraft);
+      setAdvancedJson(JSON.stringify(nextDraft, null, 2));
+      setOperationState("idle");
+      setOperationMessage("");
+      setReloadResponse(null);
+      setSaveResponse(null);
+      setProposalResponse(null);
+    }, 0);
+
+    return () => window.clearTimeout(resetId);
   }, [weightsPayload]);
 
   const config = isRecord(draft) && isRecord(draft.config) ? draft.config : {};
@@ -6241,7 +6245,7 @@ export function WorkspacePanel({
 
   const items = useMemo(() => asArray(payload), [payload]);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     setState("loading");
     setError("");
 
@@ -6314,14 +6318,17 @@ export function WorkspacePanel({
       setError(loadError instanceof Error ? loadError.message : "Could not load data.");
       setState("error");
     }
-  }
+  }, [activeView]);
 
   useEffect(() => {
     if (activeView !== "ai-query") {
-      loadData();
+      const loadId = window.setTimeout(() => {
+        void loadData();
+      }, 0);
+
+      return () => window.clearTimeout(loadId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeView]);
+  }, [activeView, loadData]);
 
   return (
     <div className="absolute inset-x-2 bottom-2 top-2 z-20 min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white/96 shadow-2xl shadow-slate-900/18 backdrop-blur sm:inset-4 sm:rounded-3xl xl:inset-5">

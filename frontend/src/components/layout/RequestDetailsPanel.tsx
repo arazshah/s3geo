@@ -370,9 +370,9 @@ function extractCapabilitiesFromPayload(payload: unknown): string[] {
   const capabilities: string[] = [];
 
   const patterns = [
-    /required capabilities:\s*([A-Za-z0-9_,\-\s]+)/gi,
-    /missing capabilities:\s*([A-Za-z0-9_,\-\s]+)/gi,
-    /could not find required capabilities:\s*([A-Za-z0-9_,\-\s]+)/gi
+    /required capabilities:\s*([A-Za-z0-9_,-\s]+)/gi,
+    /missing capabilities:\s*([A-Za-z0-9_,-\s]+)/gi,
+    /could not find required capabilities:\s*([A-Za-z0-9_,-\s]+)/gi
   ];
 
   for (const message of messages) {
@@ -381,7 +381,7 @@ function extractCapabilitiesFromPayload(payload: unknown): string[] {
 
       while ((match = pattern.exec(message)) !== null) {
         const segment = match[1] || "";
-        const tokens = segment.match(/[A-Za-z][A-Za-z0-9_\-]*/g) || [];
+        const tokens = segment.match(/[A-Za-z][A-Za-z0-9_-]*/g) || [];
 
         for (const token of tokens) {
           const cleanToken = token.trim();

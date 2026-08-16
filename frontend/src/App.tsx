@@ -102,72 +102,6 @@ function arrayFromPayload(payload: unknown, keys: string[]) {
   return [];
 }
 
-function normalizeProjectOptions(payload: unknown) {
-  const items = arrayFromPayload(payload, [
-    "items",
-    "data",
-    "results",
-    "projects"
-  ]);
-
-  const options = items
-    .map((item) => {
-      if (typeof item === "string") {
-        const value = item.trim();
-        return value ? { id: value, label: value } : null;
-      }
-
-      if (!isRecord(item)) {
-        return null;
-      }
-
-      const id = readString(
-        item,
-        [
-          "project_id",
-          "projectId",
-          "id",
-          "uuid"
-        ],
-        ""
-      ).trim();
-
-      const label = readString(
-        item,
-        [
-          "display_name",
-          "displayName",
-          "name",
-          "title",
-          "project_name",
-          "projectName",
-          "label"
-        ],
-        id
-      ).trim();
-
-      if (!id) {
-        return null;
-      }
-
-      return {
-        id,
-        label: label || id
-      };
-    })
-    .filter((item): item is { id: string; label: string } => Boolean(item));
-
-  const byId = new Map<string, { id: string; label: string }>();
-
-  for (const option of options) {
-    if (!byId.has(option.id)) {
-      byId.set(option.id, option);
-    }
-  }
-
-  return Array.from(byId.values());
-}
-
 function normalizeDatasetOptions(payload: unknown) {
   const items = arrayFromPayload(payload, [
     "items",
@@ -372,9 +306,9 @@ function extractMissingCapabilities(payload: unknown): string[] {
   const capabilityNames: string[] = [];
 
   const patterns = [
-    /required capabilities:\s*([A-Za-z0-9_,\-\s]+)/gi,
-    /missing capabilities:\s*([A-Za-z0-9_,\-\s]+)/gi,
-    /could not find required capabilities:\s*([A-Za-z0-9_,\-\s]+)/gi
+    /required capabilities:\s*([A-Za-z0-9_,-\s]+)/gi,
+    /missing capabilities:\s*([A-Za-z0-9_,-\s]+)/gi,
+    /could not find required capabilities:\s*([A-Za-z0-9_,-\s]+)/gi
   ];
 
   for (const message of messages) {
@@ -383,7 +317,7 @@ function extractMissingCapabilities(payload: unknown): string[] {
 
       while ((match = pattern.exec(message)) !== null) {
         const segment = match[1] || "";
-        const tokens = segment.match(/[A-Za-z][A-Za-z0-9_\-]*/g) || [];
+        const tokens = segment.match(/[A-Za-z][A-Za-z0-9_-]*/g) || [];
 
         for (const token of tokens) {
           const cleanToken = token.trim();
@@ -638,12 +572,27 @@ function unwrapApiPayload<T = unknown>(value: T): T {
     return value.data as T;
   }
 
-  for (const key of ["payload", "result", "body"]) {
+  for (const key of ["payload", "body"]) {
     const nested = value[key];
 
     if (isRecord(nested)) {
       return nested as T;
     }
+  }
+
+  // Successful vector-display responses use ``result`` as a domain output
+  // while retaining request_id, metadata, outputs and layers at the root.
+  // Treating every ``result`` object as an envelope drops the map contract.
+  const result = value.result;
+  const hasResponseContract =
+    "status" in value ||
+    "request_id" in value ||
+    "layers" in value ||
+    "map_layers" in value ||
+    "outputs" in value;
+
+  if (isRecord(result) && !hasResponseContract) {
+    return result as T;
   }
 
   return value;
@@ -1918,6 +1867,8 @@ export default function App() {
   const [selectedProjectId, setSelectedProjectId] = usePersistedState("smart-spatial:ai-query:selected-project-id", "");
   const [availableProjects, setAvailableProjects] = useState<string[]>([]);
   const [projectLabels, setProjectLabels] = useState<Record<string, string>>({});
+  const [projectLoadState, setProjectLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [projectLoadError, setProjectLoadError] = useState("");
   const [selectedDatasets, setSelectedDatasets] = usePersistedState<string[]>("smart-spatial:ai-query:selected-datasets", []);
   const [availableDatasets, setAvailableDatasets] = useState<string[]>([]);
   const [datasetLabels, setDatasetLabels] = useState<Record<string, string>>({});
@@ -1960,8 +1911,12 @@ export default function App() {
       queryDataSourceContexts
     );
 
-    setPlanningSteps(buildDynamicPlanningSteps(query, projectLabel, dataSourceLabels));
-    setPlanningPreviewSource("local-draft");
+    const refreshId = window.setTimeout(() => {
+      setPlanningSteps(buildDynamicPlanningSteps(query, projectLabel, dataSourceLabels));
+      setPlanningPreviewSource("local-draft");
+    }, 0);
+
+    return () => window.clearTimeout(refreshId);
   }, [
     query,
     selectedProjectId,
@@ -2286,9 +2241,14 @@ export default function App() {
   }, [addToast]);
 
   useEffect(() => {
+    if (activeView !== "ai-query") return;
+
     let mounted = true;
 
     async function loadAiQuerySelectors() {
+      setProjectLoadState("loading");
+      setProjectLoadError("");
+
       const [projectsResult, uploadsResult] = await Promise.allSettled([
         api.listProjects(),
         api.listUploads()
@@ -2297,16 +2257,18 @@ export default function App() {
       if (!mounted) return;
 
       if (projectsResult.status === "fulfilled") {
-        const projectOptions = normalizeProjectOptions(projectsResult.value);
+        const projectOptions = projectsResult.value;
         const nextProjects = projectOptions.map((item) => item.id);
 
         setAvailableProjects(nextProjects);
+        setProjectLoadState("ready");
+        setProjectLoadError("");
 
         setProjectLabels((current) => {
           const next = { ...current };
 
           for (const option of projectOptions) {
-            next[option.id] = option.label;
+            next[option.id] = option.name;
           }
 
           return next;
@@ -2315,7 +2277,14 @@ export default function App() {
         setSelectedProjectId((current) =>
           current && nextProjects.includes(current)
             ? current
-            : nextProjects[0] || ""
+            : ""
+        );
+      } else {
+        setProjectLoadState("error");
+        setProjectLoadError(
+          projectsResult.reason instanceof Error
+            ? projectsResult.reason.message
+            : "Could not load projects."
         );
       }
 
@@ -2347,7 +2316,7 @@ export default function App() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [activeView, setSelectedProjectId]);
 
   function maximizeMap() {
     setLeftCollapsed(true);
@@ -3023,7 +2992,7 @@ export default function App() {
       "Spatial analysis is running. Previous mock outputs were cleared."
     );
 
-    let response: GeoQueryResponse | null = null;
+    let response: GeoQueryResponse;
     const requestPayload = buildGeoQueryRequest(queryToRun);
 
     setRequestDetails({
@@ -3290,6 +3259,8 @@ export default function App() {
                 selectedProject={selectedProjectId}
                 availableProjects={availableProjects}
                 projectLabels={projectLabels}
+                projectLoadState={projectLoadState}
+                projectLoadError={projectLoadError}
                 selectedDatasets={selectedDatasets}
                 availableDatasets={availableDatasets}
                 datasetLabels={datasetLabels}
