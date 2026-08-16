@@ -111,3 +111,12 @@ def test_is_vector_summary_query_rejects_display_and_raster_queries() -> None:
             },
         },
     ) is False
+
+
+def test_is_vector_summary_query_rejects_multistep_analysis_workflows() -> None:
+    query = (
+        "Run a complete subsidence analysis: filter hazard zones, rank them, "
+        "intersect affected assets, and generate a PDF report."
+    )
+
+    assert is_vector_summary_query(query) is False
