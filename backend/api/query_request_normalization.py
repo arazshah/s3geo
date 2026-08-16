@@ -61,6 +61,32 @@ def normalize_query_inputs(
     }
 
     if not is_display:
+        # QuerySpec analysis also needs a canonical vector input when the UI
+        # supplies exactly one selected GeoJSON dataset.  Previously selected
+        # IDs were preserved only as metadata for non-display requests, leaving
+        # the planner with no runtime input for references such as
+        # ``$inputs.uploaded_geojson``.
+        if (
+            len(selected_ids) == 1
+            and not normalized_inputs.get("vector_ref")
+            and not normalized_inputs.get("vector")
+            and upload_storage is not None
+        ):
+            try:
+                upload_metadata = upload_storage.read_metadata(selected_ids[0])
+            except UploadStorageError:
+                upload_metadata = None
+
+            if isinstance(upload_metadata, dict) and upload_metadata.get("kind") == "vector":
+                normalized_inputs["vector_ref"] = selected_ids[0]
+                metadata.update(
+                    {
+                        "request_shape": "selected_dataset_vector_context",
+                        "bound_vector_ref": selected_ids[0],
+                        "binding_precedence": "selected_dataset_id",
+                        "normalized_dataset_selection": True,
+                    }
+                )
         return NormalizedQueryInputs(inputs=normalized_inputs, metadata=metadata)
 
     if isinstance(explicit_vector_ref, str) and explicit_vector_ref.strip():
