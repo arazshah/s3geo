@@ -41,6 +41,13 @@ export type GeoQueryRequest = {
   [key: string]: unknown;
 };
 
+export type ProjectListItem = {
+  id: string;
+  name: string;
+  description?: string;
+  status?: string;
+};
+
 export type GeoQueryResponse = {
   request_id?: string;
   requestId?: string;
@@ -125,6 +132,39 @@ const PREVIEW_QUERY_PATHS = uniquePaths([
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function normalizeProjectList(payload: unknown): ProjectListItem[] {
+  const records = Array.isArray(payload)
+    ? payload
+    : isRecord(payload) && Array.isArray(payload.projects)
+      ? payload.projects
+      : [];
+  const projects: ProjectListItem[] = [];
+  const seenIds = new Set<string>();
+
+  for (const record of records) {
+    if (!isRecord(record)) continue;
+
+    const id = typeof record.project_id === "string" ? record.project_id.trim() : "";
+    const name = typeof record.name === "string" ? record.name.trim() : "";
+
+    if (!id || !name || seenIds.has(id)) continue;
+
+    const description =
+      typeof record.description === "string" && record.description.trim()
+        ? record.description.trim()
+        : undefined;
+    const status =
+      typeof record.status === "string" && record.status.trim()
+        ? record.status.trim()
+        : undefined;
+
+    seenIds.add(id);
+    projects.push({ id, name, description, status });
+  }
+
+  return projects;
 }
 
 function toRecord(value: unknown): Record<string, unknown> {
@@ -631,8 +671,8 @@ export const api = {
     return request<unknown>("/api/v1/requests");
   },
 
-  listProjects(): Promise<unknown> {
-    return request<unknown>("/api/v1/projects");
+  async listProjects(): Promise<ProjectListItem[]> {
+    return normalizeProjectList(await request<unknown>("/api/v1/projects"));
   },
 
   createProject(payload: Record<string, unknown>): Promise<unknown> {

@@ -49,6 +49,31 @@ type GeoJsonFeatureCollection = GeoJSON.FeatureCollection<
   GeoJSON.GeoJsonProperties
 >;
 
+function MapActionButton({
+  icon,
+  label,
+  action,
+  bordered = true,
+}: {
+  icon: ReactNode;
+  label: string;
+  action?: () => void;
+  bordered?: boolean;
+}) {
+  return (
+    <button
+      onClick={action}
+      className={cx(
+        "flex h-10 w-10 items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-700",
+        bordered && "border-b border-slate-100"
+      )}
+      title={label}
+    >
+      {icon}
+    </button>
+  );
+}
+
 const TEHRAN_CENTER: L.LatLngExpression = [35.6992, 51.3886];
 
 const FEATURE_ID_KEYS = [
@@ -921,27 +946,11 @@ export function MapView({
           "absolute right-4 top-4 z-[30] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg transition-opacity duration-200",
           controlsSuppressed ? "pointer-events-none opacity-0" : "opacity-100"
         )}>
-        {([
-          [<LocateFixed size={17} />, "Reset View", resetView],
-          [<Layers size={17} />, "Fit Layers", fitToLayers],
-          [<Eye size={17} />, "Visibility controlled from right panel", undefined],
-          [<ShieldCheck size={17} />, "Validate Layer Bounds", fitToLayers],
-          [<Download size={17} />, "Export Map", undefined]
-        ] as Array<[ReactNode, string, (() => void)?]>).map(
-          ([icon, label, action], index) => (
-            <button
-              key={label}
-              onClick={action}
-              className={cx(
-                "flex h-10 w-10 items-center justify-center text-slate-600 hover:bg-blue-50 hover:text-blue-700",
-                index !== 4 && "border-b border-slate-100"
-              )}
-              title={label}
-            >
-              {icon}
-            </button>
-          )
-        )}
+        <MapActionButton icon={<LocateFixed size={17} />} label="Reset View" action={resetView} />
+        <MapActionButton icon={<Layers size={17} />} label="Fit Layers" action={fitToLayers} />
+        <MapActionButton icon={<Eye size={17} />} label="Visibility controlled from right panel" />
+        <MapActionButton icon={<ShieldCheck size={17} />} label="Validate Layer Bounds" action={fitToLayers} />
+        <MapActionButton icon={<Download size={17} />} label="Export Map" bordered={false} />
       </div>
 
       <div className={cx(

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -68,7 +68,7 @@ export function CapabilityDiagnostics({
     [missingCapabilities]
   );
 
-  async function loadPlugins() {
+  const loadPlugins = useCallback(async () => {
     if (!normalizedMissing.length) return;
 
     setLoading(true);
@@ -86,12 +86,17 @@ export function CapabilityDiagnostics({
     } finally {
       setLoading(false);
     }
-  }
+  }, [normalizedMissing.length]);
+
+  const normalizedMissingKey = normalizedMissing.join("|");
 
   useEffect(() => {
-    loadPlugins();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [normalizedMissing.join("|")]);
+    const loadId = window.setTimeout(() => {
+      void loadPlugins();
+    }, 0);
+
+    return () => window.clearTimeout(loadId);
+  }, [loadPlugins, normalizedMissingKey]);
 
   const registryText = useMemo(
     () => collectText(pluginPayload).toLowerCase(),

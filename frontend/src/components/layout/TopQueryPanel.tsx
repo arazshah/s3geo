@@ -37,6 +37,8 @@ type TopQueryPanelProps = {
   selectedProject: string;
   availableProjects: string[];
   projectLabels?: Record<string, string>;
+  projectLoadState: "loading" | "ready" | "error";
+  projectLoadError?: string;
   selectedDatasets: string[];
   availableDatasets: string[];
   datasetLabels?: Record<string, string>;
@@ -141,6 +143,8 @@ export function TopQueryPanel({
   selectedProject,
   availableProjects,
   projectLabels = {},
+  projectLoadState,
+  projectLoadError,
   selectedDatasets,
   availableDatasets,
   datasetLabels = {},
@@ -284,7 +288,13 @@ export function TopQueryPanel({
               </div>
 
               <div className="mt-1 text-[11px] font-semibold text-slate-400">
-                {projectOptions.length ? `${projectOptions.length} projects available` : "No projects loaded"}
+                {projectLoadState === "loading"
+                  ? "Loading projects…"
+                  : projectLoadState === "error"
+                    ? "Project loading failed"
+                    : projectOptions.length
+                      ? `${projectOptions.length} projects available`
+                      : "No projects available"}
               </div>
             </div>
 
@@ -355,12 +365,22 @@ export function TopQueryPanel({
                 className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-50 disabled:bg-slate-50 disabled:text-slate-400"
                 value={selectedProject}
                 onChange={(event) => onProjectChange(event.target.value)}
-                disabled={isBusy || projectOptions.length === 0}
+                disabled={isBusy || projectLoadState === "loading" || projectOptions.length === 0}
                 title="Select the project used for this AI query"
               >
-                {projectOptions.length === 0 && (
-                  <option value="">No projects loaded</option>
+                {projectLoadState === "loading" && (
+                  <option value="">Loading projects…</option>
                 )}
+
+                {projectLoadState === "error" && (
+                  <option value="">Could not load projects</option>
+                )}
+
+                {projectLoadState === "ready" && projectOptions.length === 0 && (
+                  <option value="">No projects available</option>
+                )}
+
+                {projectOptions.length > 0 && <option value="">No project selected</option>}
 
                 {projectOptions.map((project) => (
                   <option
@@ -376,6 +396,11 @@ export function TopQueryPanel({
                   </option>
                 ))}
               </select>
+              {projectLoadState === "error" && projectLoadError ? (
+                <p className="mt-1 text-[11px] font-semibold text-rose-600" role="alert">
+                  {projectLoadError}
+                </p>
+              ) : null}
             </div>
 
             <div className="min-w-0">

@@ -18,7 +18,7 @@ All runtime observations use the isolated server configuration documented in [ba
 | Frontend startup/build | Vite on 5173 and browser DOM inspection | page loads; API shows Online | confirmed working |
 | Frontend ↔ backend data discovery | browser AI Query workspace | uploads visible; 2 datasets available | confirmed working |
 | Frontend project creation/details | browser Projects workspace | project created and detail route loaded | confirmed working |
-| Frontend project selection for AI query | browser after project creation | selector remains disabled: “No projects loaded” | confirmed failed |
+| Frontend project selection for AI query | API response and active selector state trace | Phase 3C refreshes the list when AI Query is entered, parses the plain project list at the API boundary, and separates loading/empty/error states | corrected; browser re-verification pending local browser availability |
 | Frontend run of direct vector phrase | browser submits dataset ID via `data_source_ids` | Phase 2 failed because the backend ignored the selection; Phase 3B normalization now binds one valid selected GeoJSON as `vector_ref` | superseded by the Phase 3B confirmed narrow slice |
 | Docker Compose config/startup | `docker-compose config` | blocked because root `.env` missing; no containers started | blocked by prerequisite |
 

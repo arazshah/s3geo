@@ -45,6 +45,7 @@ def _service(tmp_path: Path) -> OrchestratorService:
             weights_path=tmp_path / "weights" / "router_weights.json",
             uploads_path=tmp_path / "uploads",
             outputs_path=tmp_path / "outputs",
+            projects_path=tmp_path / "projects",
             use_weighted_router=True,
             load_persisted_weights=True,
         )
@@ -69,6 +70,15 @@ def _upload_vector(client: TestClient) -> str:
     )
     assert response.status_code == 200
     return response.json()["upload_id"]
+
+
+def _create_project(client: TestClient, name: str = "Vector display project") -> str:
+    response = client.post(
+        "/api/v1/projects",
+        json={"name": name, "description": "Project context contract fixture."},
+    )
+    assert response.status_code == 200
+    return response.json()["project_id"]
 
 
 def _assert_vector_display_response(payload: dict) -> None:
@@ -192,3 +202,56 @@ def test_vector_display_requires_one_known_selected_dataset(tmp_path: Path) -> N
     }
     assert ambiguous_response.status_code == 400
     assert ambiguous_response.json()["detail"]["code"] == "input.dataset_selection_ambiguous"
+
+
+def test_project_context_coexists_with_frontend_dataset_selection(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    client, service = _client(tmp_path)
+    project_id = _create_project(client)
+    upload_id = _upload_vector(client)
+
+    def fail_if_called(_query: str):
+        raise AssertionError("LLM intent planning must not run for vector display")
+
+    monkeypatch.setattr(service, "_maybe_plan_llm_intent", fail_if_called)
+
+    response = client.post(
+        "/api/v1/query",
+        json={
+            "query": "show vector features",
+            "project_id": project_id,
+            "data_source_ids": [upload_id],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    _assert_vector_display_response(payload)
+    assert payload["metadata"]["project_context"] == {
+        "project_id": project_id,
+        "validation": "accepted",
+    }
+    assert payload["metadata"]["query_request_normalization"]["bound_vector_ref"] == upload_id
+
+
+def test_unknown_project_context_returns_structured_client_error(tmp_path: Path) -> None:
+    client, _service = _client(tmp_path)
+    upload_id = _upload_vector(client)
+
+    response = client.post(
+        "/api/v1/query",
+        json={
+            "query": "show vector features",
+            "project_id": "prj-missing",
+            "data_source_ids": [upload_id],
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == {
+        "code": "input.project_not_found",
+        "message": "The selected project was not found.",
+        "details": {"project_id": "prj-missing"},
+    }

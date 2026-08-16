@@ -6,7 +6,8 @@ import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  // The active application is frontend/src; these are archived/inactive trees.
+  globalIgnores(['dist', 'backups', 'smart-spatial-frontend']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [
@@ -17,6 +18,9 @@ export default defineConfig([
     ],
     languageOptions: {
       globals: globals.browser,
+      parserOptions: {
+        tsconfigRootDir: import.meta.dirname,
+      },
     },
   },
 ])

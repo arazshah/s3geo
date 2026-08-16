@@ -407,9 +407,38 @@ def query_endpoint(
     except QueryRequestNormalizationError as exc:
         raise HTTPException(status_code=400, detail=exc.to_public_detail()) from exc
 
+    project_id = str(body_payload.get("project_id") or "").strip() or None
+    if project_id:
+        try:
+            project = svc.get_project(project_id)
+        except OrchestratorServiceError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "input.project_not_found",
+                    "message": "The selected project was not found.",
+                    "details": {"project_id": project_id},
+                },
+            ) from exc
+
+        if not isinstance(project, dict) or project.get("project_id") != project_id:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "code": "input.project_not_found",
+                    "message": "The selected project was not found.",
+                    "details": {"project_id": project_id},
+                },
+            )
+
     normalized_metadata = dict(metadata)
     if normalized_request.metadata["request_shape"] != "legacy_or_unselected":
         normalized_metadata["query_request_normalization"] = normalized_request.metadata
+    if project_id:
+        normalized_metadata["project_context"] = {
+            "project_id": project_id,
+            "validation": "accepted",
+        }
 
     response = svc.handle_query(
         query=query_text,
@@ -422,7 +451,7 @@ def query_endpoint(
         user_context=user_context,
         metadata=normalized_metadata,
         min_score=float(min_score) if min_score is not None else None,
-        project_id=str(body_payload.get("project_id") or "").strip() or None,
+        project_id=project_id,
     )
 
     return QueryResponse(

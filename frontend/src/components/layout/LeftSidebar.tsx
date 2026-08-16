@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -379,7 +379,7 @@ export function LeftSidebar({
     }
   });
 
-  async function refreshSidebarHealth() {
+  const refreshSidebarHealth = useCallback(async () => {
     setStatusRefreshing(true);
 
     try {
@@ -396,7 +396,7 @@ export function LeftSidebar({
     } finally {
       setStatusRefreshing(false);
     }
-  }
+  }, []);
 
   function toggleStatusCardExpanded() {
     setStatusCardExpanded((current) => {
@@ -416,15 +416,19 @@ export function LeftSidebar({
   }
 
   useEffect(() => {
-    void refreshSidebarHealth();
+    const initialRefreshId = window.setTimeout(() => {
+      void refreshSidebarHealth();
+    }, 0);
 
     const interval = window.setInterval(() => {
       void refreshSidebarHealth();
     }, 30000);
 
-    return () => window.clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return () => {
+      window.clearTimeout(initialRefreshId);
+      window.clearInterval(interval);
+    };
+  }, [refreshSidebarHealth]);
 
 
   return (
