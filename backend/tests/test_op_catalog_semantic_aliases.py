@@ -45,6 +45,13 @@ def test_geometry_validation_aliases_reference_registered_capability():
     assert OP_CATALOG["validate_geometry"].input_map["vector"] == "features"
 
 
+def test_vector_metric_and_centroid_aliases_reference_registered_capabilities():
+    assert OP_CATALOG["calculate_area"].capability_name == "calculate_area_perimeter"
+    assert OP_CATALOG["calculate_area_perimeter"].capability_name == "calculate_area_perimeter"
+    assert OP_CATALOG["calculate_centroid"].capability_name == "extract_centroids"
+    assert OP_CATALOG["extract_centroids"].input_map["vector"] == "features"
+
+
 def test_buffer_alias_exists():
     assert is_supported("buffer")
     op = OP_CATALOG["buffer"]

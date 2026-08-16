@@ -943,6 +943,68 @@ OP_CATALOG: dict[str, OpDescriptor] = {
         notes="Compatibility alias for validate_geometries.",
     ),
 
+    "calculate_area_perimeter": OpDescriptor(
+        op_name="calculate_area_perimeter",
+        capability_name="calculate_area_perimeter",
+        input_map={"vector": "features"},
+        input_types={"vector": "vector"},
+        param_map={
+            "engine": "engine",
+            "precision": "precision",
+            "drop_failed": "drop_failed",
+            "source_crs": "source_crs",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes="Calculate planar area, perimeter, and length metrics.",
+    ),
+
+    "calculate_area": OpDescriptor(
+        op_name="calculate_area",
+        capability_name="calculate_area_perimeter",
+        input_map={"vector": "features"},
+        input_types={"vector": "vector"},
+        param_map={
+            "engine": "engine",
+            "precision": "precision",
+            "drop_failed": "drop_failed",
+            "source_crs": "source_crs",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes="Compatibility alias for calculate_area_perimeter.",
+    ),
+
+    "extract_centroids": OpDescriptor(
+        op_name="extract_centroids",
+        capability_name="extract_centroids",
+        input_map={"vector": "features"},
+        input_types={"vector": "vector"},
+        param_map={
+            "engine": "engine",
+            "precision": "precision",
+            "drop_failed": "drop_failed",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes="Extract centroid point features from vector geometries.",
+    ),
+
+    "calculate_centroid": OpDescriptor(
+        op_name="calculate_centroid",
+        capability_name="extract_centroids",
+        input_map={"vector": "features"},
+        input_types={"vector": "vector"},
+        param_map={
+            "engine": "engine",
+            "precision": "precision",
+            "drop_failed": "drop_failed",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes="Compatibility alias for extract_centroids.",
+    ),
+
     "summarize_vector": OpDescriptor(
         op_name="summarize_vector",
         capability_name="summarize_vector_layer",
