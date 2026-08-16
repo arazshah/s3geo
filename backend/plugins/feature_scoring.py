@@ -150,9 +150,6 @@ def _truthy(value: Any) -> bool:
             "inside",
             "within",
             "low",
-            "مجاز",
-            "داخل",
-            "بله",
         }
     return bool(value)
 
@@ -195,12 +192,6 @@ def _risk_level_score(value: Any, levels: dict[str, float] | None = None) -> flo
         "critical": 0.0,
 
         # Persian
-        "خیلی کم": 1.0,
-        "کم": 1.0,
-        "متوسط": 0.5,
-        "زیاد": 0.15,
-        "خیلی زیاد": 0.0,
-        "بحرانی": 0.0,
     }
 
     merged = dict(default_levels)
@@ -354,11 +345,6 @@ def _build_vector_metadata(features: list[dict[str, Any]], extra: dict[str, Any]
         "investment score",
         "weighted score",
         "multi criteria",
-        "امتیاز",
-        "امتیازدهی",
-        "امتیاز سرمایه گذاری",
-        "چند معیاره",
-        "رتبه بندی املاک",
     ],
     description="Score vector features using a declarative weighted scoring specification.",
     required_inputs=["features"],
@@ -489,11 +475,6 @@ def score_features(
         "sort by score",
         "top features",
         "best properties",
-        "رتبه",
-        "رتبه بندی",
-        "بهترین گزینه",
-        "بهترین املاک",
-        "مرتب سازی امتیاز",
     ],
     description="Rank vector features by a numeric score field.",
     required_inputs=["features"],

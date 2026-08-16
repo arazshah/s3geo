@@ -242,7 +242,6 @@ OP_CATALOG: dict[str, OpDescriptor] = {
         notes=(
             "Use when the user asks for nearest/closest target features for each "
             "source feature, e.g. 'nearest X to each Y', 'closest hospital to every "
-            "school', 'نزدیک‌ترین X به هر Y'. Set k=1 for one closest target per "
             "source. Output preserves source properties and adds: "
             "_nearest_distance, _neighbor_rank, _source_index, _target_index, "
             "_nearest_status, _nearest_engine, _target_properties. "
@@ -404,7 +403,6 @@ OP_CATALOG: dict[str, OpDescriptor] = {
         output_type="vector",
         notes=(
             "Create buffer polygons around input features. Use for requests like "
-            "'within X meters', 'حریم X متری', or proximity zones. Use metric CRS "
             "when distance is in meters."
         ),
     ),

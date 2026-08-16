@@ -18,7 +18,7 @@ class FakeQueryService:
         return {
             "status": "completed",
             "request_id": kwargs.get("request_id") or "req-frontend-query-contract",
-            "answer": "تحلیل انجام شد.",
+            "answer": "Analysis completed.",
             "outputs": {
                 "vectors": [],
                 "rasters": [],
@@ -62,8 +62,8 @@ class FailingQueryService:
         return {
             "status": "failed",
             "request_id": kwargs.get("request_id") or "req-failed-query-contract",
-            "answer": "در اجرای درخواست خطا رخ داد.",
-            "message": "در اجرای درخواست خطا رخ داد.",
+            "answer": "Request execution failed.",
+            "message": "Request execution failed.",
             "outputs": {},
             "layers": [],
             "map": {"layers": []},
@@ -71,7 +71,7 @@ class FailingQueryService:
             "files": [],
             "reports": [],
             "artifacts": [],
-            "warnings": ["اجرای درخواست ناموفق بود."],
+            "warnings": ["Request execution failed."],
             "metadata": {"service": "FailingQueryService"},
             "structured_error": {
                 "code": "service.test_error",
@@ -89,7 +89,7 @@ def test_v1_query_accepts_plain_query_and_defaults_inputs() -> None:
     response = client.post(
         "/api/v1/query",
         json={
-            "query": "یک تحلیل ساده تستی انجام بده",
+            "query": "Run a simple test analysis",
             "request_id": "req-ui-contract-001",
         },
     )
@@ -99,7 +99,7 @@ def test_v1_query_accepts_plain_query_and_defaults_inputs() -> None:
     assert service.calls
     call = service.calls[0]
 
-    assert call["query"] == "یک تحلیل ساده تستی انجام بده"
+    assert call["query"] == "Run a simple test analysis"
     assert call["inputs"] == {}
     assert call["band_map"] == {}
     assert call["request_id"] == "req-ui-contract-001"
@@ -112,9 +112,9 @@ def test_v1_query_accepts_plain_query_and_defaults_inputs() -> None:
 
     assert payload["status"] == "completed"
     assert payload["request_id"] == "req-ui-contract-001"
-    assert payload["query"] == "یک تحلیل ساده تستی انجام بده"
+    assert payload["query"] == "Run a simple test analysis"
     assert payload["ok"] is True
-    assert payload["summary"] == "تحلیل انجام شد."
+    assert payload["summary"] == "Analysis completed."
 
     assert isinstance(payload["outputs"], dict)
     assert isinstance(payload["layers"], list)
@@ -148,7 +148,7 @@ def test_v1_query_failed_response_exposes_errors_list() -> None:
 
     response = client.post(
         "/api/v1/query",
-        json={"query": "یک درخواست خطادار تستی"},
+        json={"query": "Run a failing test request"},
     )
 
     assert response.status_code == 200
@@ -157,8 +157,8 @@ def test_v1_query_failed_response_exposes_errors_list() -> None:
 
     assert payload["status"] == "failed"
     assert payload["ok"] is False
-    assert payload["query"] == "یک درخواست خطادار تستی"
-    assert payload["summary"] == "در اجرای درخواست خطا رخ داد."
+    assert payload["query"] == "Run a failing test request"
+    assert payload["summary"] == "Request execution failed."
     assert isinstance(payload["errors"], list)
     assert payload["errors"]
     assert payload["errors"][0]["code"] == "service.test_error"

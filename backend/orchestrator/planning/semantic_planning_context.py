@@ -42,36 +42,7 @@ from orchestrator.planning.postgis_semantic_resolver import (
 )
 
 
-_PERSIAN_DIGIT_MAP = str.maketrans(
-    {
-        "۰": "0",
-        "۱": "1",
-        "۲": "2",
-        "۳": "3",
-        "۴": "4",
-        "۵": "5",
-        "۶": "6",
-        "۷": "7",
-        "۸": "8",
-        "۹": "9",
-        "٠": "0",
-        "١": "1",
-        "٢": "2",
-        "٣": "3",
-        "٤": "4",
-        "٥": "5",
-        "٦": "6",
-        "٧": "7",
-        "٨": "8",
-        "٩": "9",
-    }
-)
-
-
 _NEAREST_TERMS = (
-    "نزدیک‌ترین",
-    "نزدیک ترین",
-    "نزدیکترین",
     "closest",
     "nearest",
     "nearby",
@@ -80,9 +51,7 @@ _NEAREST_TERMS = (
 )
 
 _DISTANCE_TERMS = (
-    "فاصله",
     "distance",
-    "متر",
     "meter",
     "metre",
     "meters",
@@ -90,40 +59,25 @@ _DISTANCE_TERMS = (
 )
 
 _TOP_TERMS = (
-    "مورد اول",
-    "اول",
-    "برتر",
     "top",
     "first",
     "limit",
 )
 
 _MAP_TERMS = (
-    "نقشه",
-    "روی نقشه",
-    "نمایش بده",
-    "نمایش",
     "map",
     "display",
     "show on map",
 )
 
 _TABLE_TERMS = (
-    "جدول",
-    "جدولی",
     "table",
     "summary",
     "summarize",
-    "خلاصه",
-    "گزارش",
 )
 
 _EXPORT_TERMS = (
     "geojson",
-    "ژئوجیسون",
-    "جئوجیسون",
-    "خروجی فایل",
-    "دانلود",
     "export",
     "download",
 )
@@ -224,9 +178,7 @@ class SemanticPlanningContext:
 
 def _normalize_text(value: str) -> str:
     value = (value or "").strip().lower()
-    value = value.replace("ي", "ی").replace("ك", "ک")
     value = value.replace("\u200c", " ")
-    value = value.translate(_PERSIAN_DIGIT_MAP)
     return " ".join(value.split())
 
 
@@ -238,8 +190,6 @@ def _contains_any(query: str, terms: Iterable[str]) -> bool:
 def extract_requested_limit(query: str) -> int | None:
     """
     Extract simple requested limit such as:
-        20 مورد اول
-        ۲۰ مورد اول
         top 10
         first 5
 
@@ -251,9 +201,6 @@ def extract_requested_limit(query: str) -> int | None:
         r"\btop\s+(\d{1,5})\b",
         r"\bfirst\s+(\d{1,5})\b",
         r"\blimit\s+(\d{1,5})\b",
-        r"\b(\d{1,5})\s+مورد\s+اول\b",
-        r"\b(\d{1,5})\s+تا(?:ی)?\s+اول\b",
-        r"\b(\d{1,5})\s+اول\b",
     )
 
     for pattern in patterns:

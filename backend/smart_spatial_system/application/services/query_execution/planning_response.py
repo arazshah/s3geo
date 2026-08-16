@@ -194,19 +194,18 @@ def build_query_spec_planning_response(
     if success:
         if total_feature_count:
             answer = (
-                f"تحلیل با موفقیت انجام شد و {total_feature_count} عارضه "
-                "استخراج شد."
+                f"Analysis completed successfully and extracted {total_feature_count} features."
             )
         else:
-            answer = "تحلیل با موفقیت انجام شد."
+            answer = "Analysis completed successfully."
     else:
-        answer = planning_error or "اجرای تحلیل برنامه‌ریزی‌شده ناموفق بود."
+        answer = planning_error or "Planned analysis execution failed."
 
     if success and outputs["files"]:
-        answer += " فایل خروجی آماده است."
+        answer += " Output files are ready."
 
     if success and primary_report is not None:
-        answer += " گزارش آماده است."
+        answer += " Reports are ready."
 
     planning_metadata = {
         **final_metadata,
@@ -304,9 +303,9 @@ def build_query_spec_planning_response(
             []
             if success
             else [
-                "ورودی‌های لازم تحلیل را بررسی و دوباره ارسال کنید.",
-                "لایه raster/تصویر ماهواره‌ای موردنیاز را به عنوان ورودی ارائه کنید.",
-                "پس از تکمیل ورودی‌ها، درخواست تحلیل را دوباره اجرا کنید.",
+                "Review and resubmit the required analysis inputs.",
+                "Provide the required raster or satellite-image layer as an input.",
+                "Run the analysis again after completing the inputs.",
             ]
         ),
         "metadata": planning_metadata,

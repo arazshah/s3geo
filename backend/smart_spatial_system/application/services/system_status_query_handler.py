@@ -29,12 +29,6 @@ def is_system_status_query(
         intent_name = str(getattr(llm_intent, "intent_name", "") or "").lower()
 
     system_tokens = [
-        "وضعیت سیستم",
-        "سلامت سیستم",
-        "وضعیت سرویس",
-        "سلامت سرویس",
-        "سیستم را بررسی",
-        "بررسی سیستم",
         "health",
         "system status",
         "service status",
@@ -190,10 +184,10 @@ def try_handle_system_status_query(
     plugin_count = len(plugin_ids) if plugin_ids else len(module_names)
 
     answer = (
-        "سیستم فعال است و سرویس ارکستریتور آماده پاسخ‌گویی است. "
-        f"تعداد قابلیت‌های فعال: {enabled_count if enabled_count is not None else 'نامشخص'}، "
-        f"تعداد افزونه‌های بارگذاری‌شده: {plugin_count}. "
-        "اتصال LLM نیز در تنظیمات runtime قابل بررسی است."
+        "The system is operational and the orchestrator service is ready. "
+        f"Enabled capabilities: {enabled_count if enabled_count is not None else 'unknown'}; "
+        f"loaded plugins: {plugin_count}. "
+        "The LLM connection can be checked in runtime settings."
     )
 
     response = {
@@ -222,8 +216,8 @@ def try_handle_system_status_query(
         },
         "warnings": [],
         "next_actions": [
-            "برای مشاهده جزئیات افزونه‌ها از بخش Plugin Manager استفاده کنید.",
-            "برای تست اتصال LLM از مسیر /settings/llm/smoke-test استفاده کنید.",
+            "Use Plugin Manager to inspect plugin details.",
+            "Use /settings/llm/smoke-test to test the LLM connection.",
         ],
         "metadata": json_safe(final_metadata),
     }

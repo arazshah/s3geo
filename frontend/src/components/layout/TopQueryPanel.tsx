@@ -239,7 +239,7 @@ export function TopQueryPanel({
   }
 
   return (
-    <section className="relative z-40 max-h-[35vh] shrink-0 overflow-x-hidden overflow-y-auto border-b border-slate-200 bg-gradient-to-br from-white via-slate-50/70 to-blue-50/40 px-5 py-4 shadow-sm shadow-slate-200/50">
+    <section className="relative z-40 shrink-0 overflow-x-hidden border-b border-slate-200 bg-gradient-to-br from-white via-slate-50/70 to-blue-50/40 px-5 py-4 shadow-sm shadow-slate-200/50">
       <div className="mb-3 flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg shadow-slate-300/60">

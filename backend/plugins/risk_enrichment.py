@@ -151,24 +151,18 @@ def _normalize_risk_level(value: Any, default: str = "low") -> str:
     mapping = {
         "very_low": "very_low",
         "very low": "very_low",
-        "خیلی کم": "very_low",
 
         "low": "low",
-        "کم": "low",
 
         "medium": "medium",
         "moderate": "medium",
-        "متوسط": "medium",
 
         "high": "high",
-        "زیاد": "high",
 
         "very_high": "very_high",
         "very high": "very_high",
-        "خیلی زیاد": "very_high",
 
         "critical": "critical",
-        "بحرانی": "critical",
     }
 
     if text in mapping:
@@ -316,13 +310,6 @@ def _merge_risk_spec(
         "fire risk",
         "property risk",
         "site risk",
-        "ریسک",
-        "ریسک سیل",
-        "ریسک زلزله",
-        "ریسک آتش",
-        "خطر سیل",
-        "خطر زلزله",
-        "خطر آتش‌سوزی",
     ],
     description=(
         "Add deterministic flood/earthquake/fire risk attributes to vector features. "

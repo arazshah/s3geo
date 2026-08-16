@@ -9,5 +9,5 @@ allowed_extensions:
   - .kml
   - .fgb
 
-# اگر خالی باشد، از همه مسیرها می‌تواند بخواند.
+# When empty, all paths are readable.
 allowed_roots: []

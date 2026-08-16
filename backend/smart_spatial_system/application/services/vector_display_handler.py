@@ -115,17 +115,9 @@ def try_handle_vector_display_directly(
     normalized_query_for_vector_guard = str(query or "").lower()
     real_estate_ranking_terms = (
         # Keep this list focused on ranking/report/PDF/table intent.
-        # Generic property words such as "ملک" and "املاک" must not
-        # hijack simple vector display queries like:
-        # "این ملک‌ها را روی نقشه نمایش بده".
-        "امتیاز",
-        "رتبه",
-        "رتبه‌بندی",
-        "رتبه بندی",
-        "گزارش",
+        # Generic property words must not hijack simple vector display
+        # requests such as "show these properties on the map".
         "pdf",
-        "پی دی اف",
-        "جدول",
     )
 
     if (

@@ -385,10 +385,10 @@ def _escape_literal_percent_for_pyformat(sql: str) -> str:
     Escape literal percent signs for psycopg/psycopg2 pyformat execution.
 
     psycopg uses %s placeholders. Therefore literal SQL patterns such as:
-        ILIKE '%مترو%'
+        ILIKE '%subway%'
         ILIKE '%metro%'
     must be sent to cursor.execute(sql, params) as:
-        ILIKE '%%مترو%%'
+        ILIKE '%%subway%%'
         ILIKE '%%metro%%'
 
     Keep real %s placeholders intact.
@@ -442,7 +442,7 @@ def _execute_postgis_query(
 
     SQL is built deterministically with all safe values inlined, so normally no
     bound parameters are required. This avoids pyformat placeholder conflicts
-    with literal LIKE patterns such as '%مترو%' or '%subway%'.
+    with literal LIKE patterns such as '%metro%' or '%subway%'.
 
     Primary driver is psycopg v3, with a psycopg2 fallback for rare driver-level
     decode edge cases on multilingual OSM data.
@@ -669,19 +669,6 @@ def _to_int_or_none(value: Any) -> int | None:
         "sql layer",
         "db layer",
         "gis database",
-        "پست‌جیس",
-        "پست جیس",
-        "پستگیس",
-        "پست گریس",
-        "پستگرس",
-        "دیتابیس مکانی",
-        "پایگاه داده مکانی",
-        "لایه دیتابیس",
-        "لایه پایگاه داده",
-        "خواندن از دیتابیس",
-        "واکشی لایه",
-        "اتصال به دیتابیس",
-        "اتصال به پایگاه داده",
     ],
     description=(
         "Connect to PostgreSQL/PostGIS, fetch a spatial table/layer, "
@@ -999,13 +986,6 @@ LIMIT {int(limit)}
         "read sql layer",
         "sql geojson",
         "query postgis",
-        "تحلیل postgis",
-        "کوئری postgis",
-        "کوئری پست‌جیس",
-        "کوئری پست جیس",
-        "کوئری مکانی",
-        "تحلیل مکانی دیتابیس",
-        "اجرای sql مکانی",
     ],
     description=(
         "Execute a read-only SELECT/WITH SQL query against PostgreSQL/PostGIS "
@@ -1268,10 +1248,6 @@ def _build_safe_sql_from_select_parts(
         "database query",
         "spatial database query",
         "query_database",
-        "کوئری دیتابیس",
-        "کوئری پایگاه داده",
-        "کوئری postgis",
-        "پرس‌وجوی postgis",
     ],
     description=(
         "Canonical adapter for logical query_database operations against PostGIS. "

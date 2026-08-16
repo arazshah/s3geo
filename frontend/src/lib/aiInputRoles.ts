@@ -67,12 +67,6 @@ function isProximityQuery(query: string, inferredIntent?: string, detectedCriter
     "rank by distance",
     "measure distance",
     "nearest neighbor",
-    "نزدیک",
-    "نزدیکی",
-    "نزدیکترین",
-    "نزدیک‌ترین",
-    "فاصله",
-    "مجاورت"
   ];
 
   return proximityTerms.some((term) => normalizedQuery.includes(term.trim())) ||
@@ -108,11 +102,6 @@ function inferSourceTarget(datasets: AiRoleDataset[]): {
     "source",
     "rank",
     "suitability",
-    "محدوده",
-    "قطعه",
-    "پلاک",
-    "کاندید",
-    "گزینه"
   ];
 
   const targetKeywords = [
@@ -134,13 +123,6 @@ function inferSourceTarget(datasets: AiRoleDataset[]): {
     "amenity",
     "amenities",
     "rail",
-    "ایستگاه",
-    "مترو",
-    "مدرسه",
-    "بیمارستان",
-    "مرکز خرید",
-    "راه",
-    "جاده"
   ];
 
   const scored = datasets.map((dataset, index) => {

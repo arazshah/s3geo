@@ -238,7 +238,7 @@ class OrchestratorServiceConfig:
 
     min_score: float = 0.01
 
-    response_language: str = "fa"
+    response_language: str = "en"
 
     # Experimental opt-in: execute QuerySpec plans through the
     # geochat_kernel execution bridge in addition to the current DAG path.
@@ -277,8 +277,8 @@ class OrchestratorServiceConfig:
         if self.max_weight < self.min_weight:
             raise ValueError("max_weight must be >= min_weight.")
 
-        if self.response_language not in {"fa", "en"}:
-            raise ValueError("response_language must be one of: fa, en.")
+        if self.response_language != "en":
+            raise ValueError("response_language must be en.")
 
 
 class OrchestratorServiceError(RuntimeError):

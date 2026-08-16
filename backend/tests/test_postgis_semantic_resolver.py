@@ -127,7 +127,7 @@ def test_resolve_shopping_center_polygon_candidate():
 
 def test_infer_persian_query_concepts():
     concepts = infer_semantic_concepts(
-        "در تهران نزدیک‌ترین مرکز خرید به هر ایستگاه مترو را پیدا کن"
+        "find the nearest shopping center to each metro station in Tehran"
     )
 
     assert "metro_station" in concepts
@@ -138,7 +138,7 @@ def test_resolve_query_semantic_layers_returns_candidate_dict():
     schema = _osm_like_schema_without_station_column()
 
     resolved = resolve_query_semantic_layers(
-        "نزدیک‌ترین مرکز خرید به هر ایستگاه مترو را پیدا کن و فاصله را حساب کن",
+        "find the nearest shopping center to each metro station and calculate distance",
         schema,
     )
 

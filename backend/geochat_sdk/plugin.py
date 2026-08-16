@@ -53,11 +53,11 @@ class SDKStepHandler(BaseStepHandler):
         sig = inspect.signature(self._reg.func)
         kwargs: dict[str, Any] = {}
 
-        # ── کلید اصلاح: resolve کردن annotation‌های رشته‌ای به نوع واقعی ──
+        # Resolve string annotations to their concrete runtime types.
         try:
             resolved_hints = get_type_hints(self._reg.func)
         except Exception:
-            # اگر resolve ناموفق بود، از annotation خام استفاده می‌کنیم
+            # Fall back to the raw annotation when resolution fails.
             resolved_hints = {
                 p: param.annotation
                 for p, param in sig.parameters.items()
@@ -65,7 +65,7 @@ class SDKStepHandler(BaseStepHandler):
             }
 
         for param_name, param in sig.parameters.items():
-            # annotation واقعی (نه رشته) را از resolved_hints می‌گیریم
+            # Prefer the resolved annotation instead of its string form.
             annotation = resolved_hints.get(param_name, param.annotation)
 
             # 1. Map context
@@ -249,7 +249,7 @@ class SDKResultFusion(BaseResultFusion):
                 response.groups.append(
                     FeatureGroup(
                         id=f"{self._plugin_id}_group",
-                        label="نتایج پردازش SDK",
+                        label="SDK Processing Results",
                         features=f_objs,
                     )
                 )
@@ -260,10 +260,10 @@ class SDKResultFusion(BaseResultFusion):
 
         if has_features:
             response.user_message.summary = (
-                f"پردازش SDK با موفقیت انجام شد. {len(response.features)} عارضه یافت شد."
+                f"SDK processing completed successfully. Found {len(response.features)} features."
             )
         else:
-            response.user_message.summary = "پردازش SDK با موفقیت انجام شد."
+            response.user_message.summary = "SDK processing completed successfully."
 
         return response
 

@@ -214,7 +214,7 @@ def _compute_summary(
     score_field: str = "investment_score",
     rank_field: str = "rank",
     name_field: str = "name",
-    language: str = "fa",
+    language: str = "en",
 ) -> dict[str, Any]:
     if not features:
         return {
@@ -306,17 +306,17 @@ def _format_value(value: Any, fmt: str) -> Any:
         if isinstance(value, bool):
             return "✓" if value else "✗"
         if isinstance(value, str):
-            return "✓" if value.lower() in {"true", "1", "yes", "داخل", "مجاز"} else "✗"
+            return "✓" if value.lower() in {"true", "1", "yes", "inside", "allowed"} else "✗"
         return "✓" if value else "✗"
 
-    if fmt in {"risk_fa", "risk_persian"}:
+    if fmt in {"risk", "risk_en"}:
         mapping = {
-            "very_low": "خیلی کم",
-            "low": "کم",
-            "medium": "متوسط",
-            "high": "زیاد",
-            "very_high": "خیلی زیاد",
-            "critical": "بحرانی",
+            "very_low": "Very Low",
+            "low": "Low",
+            "medium": "Medium",
+            "high": "High",
+            "very_high": "Very High",
+            "critical": "Critical",
         }
         return mapping.get(str(value).lower(), str(value))
 
@@ -334,8 +334,8 @@ def _build_table(
 
     if not table_spec:
         columns = [
-            {"field": rank_field, "label": "رتبه", "align": "center"},
-            {"field": score_field, "label": "امتیاز", "align": "center"},
+            {"field": rank_field, "label": "Rank", "align": "center"},
+            {"field": score_field, "label": "Score", "align": "center"},
         ]
         rows = [
             {
@@ -345,7 +345,7 @@ def _build_table(
             for f in features
         ]
         return {
-            "title": "جدول رتبه‌بندی",
+            "title": "Ranking Table",
             "columns": columns,
             "rows": rows,
             "total_rows": len(rows),
@@ -393,7 +393,7 @@ def _build_table(
         rows.append(row)
 
     return {
-        "title": table_spec.title or "جدول رتبه‌بندی",
+        "title": table_spec.title or "Ranking Table",
         "columns": columns_info,
         "rows": rows,
         "total_rows": len(rows),
@@ -449,7 +449,7 @@ def _build_map_layers(
         result.append({
             "source": "ranked",
             "kind": "features",
-            "label": "ملک‌های رتبه‌بندی‌شده",
+            "label": "Ranked Properties",
             "visible": True,
             "style": {},
             "feature_count": len(features),
@@ -472,11 +472,6 @@ def _build_map_layers(
         "report builder",
         "ranking report",
         "spatial report",
-        "گزارش",
-        "تولید گزارش",
-        "ساخت گزارش",
-        "گزارش رتبه‌بندی",
-        "خروجی گزارش",
     ],
     description=(
         "Build a structured report from ranked/scored features and a ReportSpec. "
@@ -548,14 +543,14 @@ def build_report(
     except Exception as exc:
         return ReportOut(
             meta={
-                "title": "گزارش",
-                "language": "fa",
+                "title": "Report",
+                "language": "en",
                 "format": "pdf",
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "feature_count": 0,
             },
             summary={},
-            table={"title": "جدول", "columns": [], "rows": [], "total_rows": 0},
+            table={"title": "Table", "columns": [], "rows": [], "total_rows": 0},
             map_layers=[],
             spec={},
             success=False,
@@ -577,7 +572,7 @@ def build_report(
             f"score_field resolved from {original_score_field!r} to {score_field!r}"
         )
 
-    language = spec.language or "fa"
+    language = "en"
 
     summary = _compute_summary(
         input_features,

@@ -982,7 +982,7 @@ Return ONLY one JSON object with this shape:
     }
   ],
   "metadata": {
-    "language": "fa",
+    "language": "en",
     "assumptions": []
   }
 }
@@ -1392,10 +1392,10 @@ def _semantic_distance_field(reference_ref: str) -> str:
     """
     ref = str(reference_ref or "").lower()
 
-    if any(token in ref for token in ("road", "roads", "street", "highway", "خیابان", "جاده")):
+    if any(token in ref for token in ("road", "roads", "street", "highway")):
         return "distance_to_road"
 
-    if any(token in ref for token in ("poi", "metro", "mall", "shopping", "station", "مترو", "مرکز", "خرید")):
+    if any(token in ref for token in ("poi", "metro", "mall", "shopping", "station")):
         return "distance_to_poi"
 
     return "distance_to_reference"
@@ -1431,15 +1431,6 @@ def _query_explicitly_requests_multi_criteria_scoring(
         "weighted",
         "multi-criteria",
         "multi criteria",
-        "امتیاز",
-        "امتیازدهی",
-        "سرمایه‌گذاری",
-        "مناسب‌ترین",
-        "مناسب ترین",
-        "چندمعیاره",
-        "چند معیاره",
-        "وزن‌دهی",
-        "وزن دهی",
     )
 
     return any(token in text for token in explicit_scoring_tokens)

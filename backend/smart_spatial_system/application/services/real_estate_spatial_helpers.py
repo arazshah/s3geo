@@ -271,9 +271,9 @@ def has_bool_like_value(props: dict[str, Any], *keys: str) -> bool:
 def normalize_risk_level(value: Any) -> str:
     text = str(value or "").strip().lower()
 
-    low_values = {"low", "l", "پایین", "کم", "خوب", "ایمن", "safe"}
-    medium_values = {"medium", "med", "m", "متوسط", "میانه", "قابل قبول", "قابل‌قبول"}
-    high_values = {"high", "h", "بالا", "زیاد", "پرخطر", "خطرناک", "unsafe"}
+    low_values = {"low", "l", "safe", "good"}
+    medium_values = {"medium", "med", "m", "acceptable"}
+    high_values = {"high", "h", "unsafe", "hazardous"}
 
     if text in low_values:
         return "low"
@@ -282,5 +282,5 @@ def normalize_risk_level(value: Any) -> str:
     if text in high_values:
         return "high"
 
-    # اگر مقدار نامشخص بود، برای MVP آن را medium در نظر می‌گیریم تا حذف سخت‌گیرانه نشود.
+    # Treat unknown values as medium in the MVP to avoid overly strict exclusion.
     return "medium"

@@ -62,14 +62,14 @@ def apply_intent_to_query(
         ]
 
         if vectorize:
-            parts.append("polygon vectorize استخراج کن.")
+            parts.append("extract and vectorize polygons.")
 
         parts.append(f"original_query: {query}")
 
         return " ".join(parts)
 
     if intent_name == "raster_vectorization":
-        return "NDVI raster_to_vector polygon استخراج کن. " + f"original_query: {query}"
+        return "Extract NDVI polygons with raster_to_vector. " + f"original_query: {query}"
 
     return query
 

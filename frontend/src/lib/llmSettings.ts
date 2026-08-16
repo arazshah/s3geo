@@ -114,7 +114,7 @@ export function saveFrontendLlmSettings(settings: FrontendLlmSettings) {
 
   const safeSettings: FrontendLlmSettings = {
     ...normalizeFrontendLlmSettings(settings),
-    // مهم: API key واقعی را در localStorage ذخیره نمی‌کنیم.
+    // Never store the actual API key in localStorage.
     apiKeyProvided: Boolean(settings.apiKeyProvided),
     updatedAt: new Date().toISOString()
   };

@@ -77,23 +77,23 @@ def build_real_estate_ranking_artifacts(
         summary["spatial_enrichment"] = spatial_enrichment_summary
 
     report = {
-        "title": "گزارش رتبه‌بندی و تحلیل سرمایه‌گذاری املاک",
-        "language": "fa",
+        "title": "Property Ranking and Investment Analysis Report",
+        "language": "en",
         "summary": summary,
         "ranking": table_rows,
         "rejected": rejected_rows,
         "notes": [
-            "املاک با ریسک high یا خارج از محدوده مجاز ساخت‌وساز حذف شده‌اند.",
-            "ریسک medium در MVP حذف نشده و به‌صورت جریمه امتیازی اعمال شده است.",
-            "امتیاز نهایی بر اساس نزدیکی به مترو/مرکز خرید، خیابان اصلی، ریسک‌ها، محدوده مجاز و قیمت محاسبه شده است.",
+            "Properties with high risk or outside the buildable area were excluded.",
+            "Medium risk is retained in the MVP and applied as a scoring penalty.",
+            "The final score uses proximity to metro or shopping locations, main roads, risks, buildable-area status, and price.",
         ],
     }
 
     message = (
-        f"رتبه‌بندی املاک انجام شد. از {len(features)} ملک، "
-        f"{len(ranked_features)} ملک واجد شرایط بودند."
+        f"Property ranking completed. Of {len(features)} properties, "
+        f"{len(ranked_features)} were eligible."
     )
     if top_row:
-        message += f" بهترین گزینه: {top_row.get('name')} با امتیاز {top_row.get('score')}."
+        message += f" Top candidate: {top_row.get('name')} with score {top_row.get('score')}."
 
     return table_rows, ranked_geojson, summary, report, message

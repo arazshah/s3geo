@@ -12,9 +12,9 @@ from orchestrator.service import OrchestratorService
 
 
 REAL_ESTATE_QUERY = (
-    "ملک‌هایی را پیدا کن که کمتر از ۵۰۰ متر به مترو یا مرکز خرید نزدیک باشند، "
-    "نزدیک خیابان اصلی باشند، ریسک سیل و زلزله و آتش‌سوزی پایین داشته باشند، "
-    "به هر ملک امتیاز بده و گزارش رتبه‌بندی تولید کن"
+    "Find properties within 500 meters of a metro station or shopping center, "
+    "near a main road, with low flood, earthquake, and fire risk. "
+    "Score each property and generate a ranking report."
 )
 
 
@@ -26,7 +26,7 @@ def _sample_properties() -> dict[str, Any]:
                 "type": "Feature",
                 "properties": {
                     "id": "p1",
-                    "name": "آپارتمان مرکز",
+                    "name": "Central Apartment",
                     "price": 12000000000,
                     "kind": "apartment",
                     "distance_to_metro_m": 420,
@@ -46,7 +46,7 @@ def _sample_properties() -> dict[str, Any]:
                 "type": "Feature",
                 "properties": {
                     "id": "p2",
-                    "name": "ویلای لوکس",
+                    "name": "Luxury Villa",
                     "price": 18000000000,
                     "kind": "villa",
                     "distance_to_metro_m": 700,
@@ -66,7 +66,7 @@ def _sample_properties() -> dict[str, Any]:
                 "type": "Feature",
                 "properties": {
                     "id": "p3",
-                    "name": "زمین حاشیه‌ای",
+                    "name": "Peripheral Land",
                     "price": 7500000000,
                     "kind": "land",
                     "distance_to_metro_m": 1200,
@@ -90,7 +90,7 @@ def _fake_llm_intent() -> dict[str, Any]:
     return {
         "intent_name": "real_estate_ranking",
         "language": "fa",
-        "summary": "رتبه‌بندی املاک بر اساس نزدیکی، ریسک و گزارش",
+        "summary": "Property ranking based on proximity and risk with a report",
         "preferred_capabilities": [
             "filter_features",
             "score_features",
@@ -118,7 +118,7 @@ def _service_without_real_llm(monkeypatch) -> OrchestratorService:
 
     svc = OrchestratorService()
 
-    # تست نباید به AvalAI/OpenAI وصل شود.
+    # Tests must not connect to AvalAI or OpenAI.
     monkeypatch.setattr(
         svc,
         "_maybe_plan_llm_intent",
@@ -145,19 +145,19 @@ def test_real_estate_ranking_query_routes_to_ranking_bridge(monkeypatch):
     assert summary["candidate_count"] == 3
     assert summary["eligible_count"] == 2
     assert summary["rejected_count"] == 1
-    assert summary["top_property"] == "ویلای لوکس"
+    assert summary["top_property"] == "Luxury Villa"
 
     ranking = response["result"]["ranking"]
     assert len(ranking) == 2
     assert ranking[0]["rank"] == 1
-    assert ranking[0]["name"] == "ویلای لوکس"
+    assert ranking[0]["name"] == "Luxury Villa"
     assert ranking[1]["rank"] == 2
-    assert ranking[1]["name"] == "آپارتمان مرکز"
+    assert ranking[1]["name"] == "Central Apartment"
     assert ranking[0]["score"] > ranking[1]["score"]
 
     rejected = response["result"]["rejected"]
     assert len(rejected) == 1
-    assert rejected[0]["name"] == "زمین حاشیه‌ای"
+    assert rejected[0]["name"] == "Peripheral Land"
     assert "high_flood_risk" in rejected[0]["reasons"]
     assert "outside_allowed_construction_zone" in rejected[0]["reasons"]
 
@@ -249,7 +249,7 @@ def test_simple_vector_display_is_not_hijacked_by_ranking_bridge(monkeypatch):
         lambda query: {
             "intent_name": "vector_display",
             "language": "fa",
-            "summary": "نمایش لایه برداری روی نقشه",
+            "summary": "Display a vector layer on the map",
             "preferred_capabilities": ["inspect_vector", "display_vector_layer"],
             "required_inputs": {
                 "raster": False,
@@ -268,7 +268,7 @@ def test_simple_vector_display_is_not_hijacked_by_ranking_bridge(monkeypatch):
     )
 
     response = svc.handle_query(
-        query="این ملک‌ها را روی نقشه نمایش بده و خلاصه کن",
+        query="show these properties on the map and summarize them",
         inputs={"vector": _sample_properties()},
     )
 

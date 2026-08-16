@@ -29,13 +29,13 @@ def extract_property_feature_collection_from_inputs(
                 props.get("property_id")
                 or str(props.get("id") or "").startswith("prop-")
                 or layer == "property"
-                or property_type in {"apartment", "villa", "land", "house", "ملک", "آپارتمان", "ویلا", "زمین"}
+                or property_type in {"apartment", "villa", "land", "house", "property"}
             )
 
             if has_property_identity:
                 property_features.append(feature)
 
-        # اگر featureهای property پیدا شد، فقط همان‌ها را برای ranking برگردان.
+        # When property features exist, return only those features for ranking.
         if property_features:
             out = dict(fc)
             out["features"] = property_features
@@ -159,10 +159,6 @@ def extract_real_estate_spatial_context_from_inputs(
             "villa",
             "house",
             "land",
-            "ملک",
-            "آپارتمان",
-            "ویلا",
-            "زمین",
         ]
         if any(term in text for term in property_terms):
             return "property"
@@ -172,8 +168,6 @@ def extract_real_estate_spatial_context_from_inputs(
             "subway",
             "station",
             "metro_station",
-            "ایستگاه مترو",
-            "مترو",
         ]
         if any(term in text for term in metro_terms):
             return "metro"
@@ -183,9 +177,6 @@ def extract_real_estate_spatial_context_from_inputs(
             "shopping",
             "shopping_center",
             "commercial_center",
-            "مرکز خرید",
-            "خرید",
-            "مال",
         ]
         if any(term in text for term in mall_terms):
             return "malls"
@@ -197,10 +188,6 @@ def extract_real_estate_spatial_context_from_inputs(
             "street",
             "highway",
             "primary",
-            "خیابان اصلی",
-            "جاده اصلی",
-            "خیابان",
-            "جاده",
         ]
         if any(term in text for term in road_terms):
             return "main_roads"
@@ -214,10 +201,6 @@ def extract_real_estate_spatial_context_from_inputs(
             "build-zone",
             "zoning",
             "allowed construction",
-            "محدوده مجاز",
-            "محدوده ساخت",
-            "ساخت‌وساز مجاز",
-            "ساخت و ساز مجاز",
         ]
         if any(term in text for term in allowed_zone_terms):
             return "allowed_zones"

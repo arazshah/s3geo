@@ -74,7 +74,7 @@ class SummarySpec:
     source: str
     stats: list[str] = field(default_factory=list)
     template: str = ""
-    language: str = "fa"
+    language: str = "en"
 
 
 @dataclass
@@ -104,8 +104,8 @@ class ReportSpec:
         Renderer-specific settings.
     """
 
-    title: str = "گزارش تحلیل فضایی"
-    language: str = "fa"
+    title: str = "Spatial Analysis Report"
+    language: str = "en"
     map_layers: list[MapLayerSpec] = field(default_factory=list)
     tables: list[TableSpec] = field(default_factory=list)
     summary: SummarySpec | None = None
@@ -120,9 +120,9 @@ class ReportSpec:
 def default_ranked_features_report_spec(
     ranked_source: str = "ranked",
     *,
-    language: str = "fa",
+    language: str = "en",
     format: str = "pdf",
-    title: str = "گزارش رتبه‌بندی عارضه‌ها",
+    title: str = "Feature Ranking Report",
     score_field: str = "investment_score",
     rank_field: str = "rank",
     name_field: str = "name",
@@ -138,18 +138,18 @@ def default_ranked_features_report_spec(
         MapLayerSpec(
             source=ranked_source,
             kind="choropleth",
-            label="عارضه‌های رتبه‌بندی‌شده",
+            label="Ranked Features",
             style={"color_field": score_field, "radius": 10},
         )
     ]
 
     columns = [
-        TableColumnSpec(field=rank_field, label="رتبه", align="center", width=60),
-        TableColumnSpec(field="id", label="شناسه", align="left"),
-        TableColumnSpec(field=name_field, label="نام", align="right"),
+        TableColumnSpec(field=rank_field, label="Rank", align="center", width=60),
+        TableColumnSpec(field="id", label="ID", align="left"),
+        TableColumnSpec(field=name_field, label="Name", align="left"),
         TableColumnSpec(
             field=score_field,
-            label="امتیاز",
+            label="Score",
             format=".1f",
             align="center",
             width=80,
@@ -162,7 +162,7 @@ def default_ranked_features_report_spec(
         sort_by=rank_field,
         sort_order="asc",
         max_rows=50,
-        title="جدول رتبه‌بندی",
+        title="Ranking Table",
     )
 
     summary = SummarySpec(
@@ -174,7 +174,7 @@ def default_ranked_features_report_spec(
             "min_score",
             "max_score",
         ],
-        template="خلاصه رتبه‌بندی عارضه‌ها",
+        template="Feature ranking summary",
         language=language,
     )
 
@@ -197,9 +197,9 @@ def default_real_estate_report_spec(
     ranked_source: str = "ranked",
     *,
     map_sources: dict[str, str] | None = None,
-    language: str = "fa",
+    language: str = "en",
     format: str = "pdf",
-    title: str = "گزارش رتبه‌بندی و تحلیل سرمایه‌گذاری ملک",
+    title: str = "Property Ranking and Investment Analysis Report",
 ) -> ReportSpec:
     """
     Default report spec for the real-estate property analysis use case.
@@ -212,7 +212,7 @@ def default_real_estate_report_spec(
         map_layers.append(MapLayerSpec(
             source=map_sources["buildable_zone"],
             kind="features",
-            label="محدوده مجاز ساخت‌وساز",
+            label="Buildable Area",
             style={"color": "#22c55e", "fill_opacity": 0.15},
         ))
 
@@ -220,7 +220,7 @@ def default_real_estate_report_spec(
         map_layers.append(MapLayerSpec(
             source=map_sources["poi"],
             kind="features",
-            label="نقاط مهم (مترو / مراکز خرید)",
+            label="Points of Interest (Metro / Shopping Centers)",
             style={"color": "#3b82f6", "radius": 8},
         ))
 
@@ -228,48 +228,48 @@ def default_real_estate_report_spec(
         map_layers.append(MapLayerSpec(
             source=map_sources["roads"],
             kind="features",
-            label="خیابان‌های اصلی",
+            label="Main Roads",
             style={"color": "#f59e0b", "weight": 2},
         ))
 
     map_layers.append(MapLayerSpec(
         source=ranked_source,
         kind="choropleth",
-        label="ملک‌های رتبه‌بندی‌شده",
+        label="Ranked Properties",
         style={"color_field": "investment_score", "radius": 10},
     ))
 
     columns = [
-        TableColumnSpec(field="rank", label="رتبه", align="center", width=60),
-        TableColumnSpec(field="name", label="نام ملک", align="right"),
+        TableColumnSpec(field="rank", label="Rank", align="center", width=60),
+        TableColumnSpec(field="name", label="Property Name", align="left"),
         TableColumnSpec(
             field="investment_score",
-            label="امتیاز",
+            label="Score",
             format=".1f",
             align="center",
             width=80,
         ),
         TableColumnSpec(
             field="distance_to_poi",
-            label="فاصله تا POI (متر)",
+            label="Distance to POI (meters)",
             format=".0f",
             align="center",
         ),
         TableColumnSpec(
             field="distance_to_road",
-            label="فاصله تا خیابان (متر)",
+            label="Distance to Road (meters)",
             format=".0f",
             align="center",
         ),
         TableColumnSpec(
             field="inside_buildable_zone",
-            label="محدوده مجاز",
+            label="Buildable Area",
             align="center",
             width=100,
         ),
-        TableColumnSpec(field="flood_risk", label="ریسک سیل", align="center"),
-        TableColumnSpec(field="earthquake_risk", label="ریسک زلزله", align="center"),
-        TableColumnSpec(field="fire_risk", label="ریسک آتش", align="center"),
+        TableColumnSpec(field="flood_risk", label="Flood Risk", align="center"),
+        TableColumnSpec(field="earthquake_risk", label="Earthquake Risk", align="center"),
+        TableColumnSpec(field="fire_risk", label="Fire Risk", align="center"),
     ]
 
     tables = [
@@ -279,7 +279,7 @@ def default_real_estate_report_spec(
             sort_by="rank",
             sort_order="asc",
             max_rows=50,
-            title="جدول رتبه‌بندی ملک‌ها",
+            title="Property Ranking Table",
         )
     ]
 
@@ -344,12 +344,12 @@ def report_spec_from_dict(data: dict[str, Any]) -> ReportSpec:
             source=str(summary_raw.get("source") or ""),
             stats=list(summary_raw.get("stats") or []),
             template=str(summary_raw.get("template") or ""),
-            language=str(summary_raw.get("language") or "fa"),
+            language="en",
         )
 
     return ReportSpec(
-        title=str(data.get("title") or "گزارش تحلیل فضایی"),
-        language=str(data.get("language") or "fa"),
+        title=str(data.get("title") or "Spatial Analysis Report"),
+        language="en",
         map_layers=map_layers,
         tables=tables,
         summary=summary,

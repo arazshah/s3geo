@@ -141,7 +141,6 @@ class SemanticLayerCandidate:
 
 def _normalize_text(value: str) -> str:
     value = (value or "").strip().lower()
-    value = value.replace("ي", "ی").replace("ك", "ک")
     value = value.replace("\u200c", " ")
     return " ".join(value.split())
 
@@ -506,7 +505,6 @@ def infer_semantic_concepts(
 
         raw_labels = rule.get("labels")
         if isinstance(raw_labels, Mapping):
-            labels.extend(str(x) for x in raw_labels.get("fa", []) or [])
             labels.extend(str(x) for x in raw_labels.get("en", []) or [])
 
         labels.extend(str(x) for x in rule.get("aliases", []) or [])
@@ -639,7 +637,6 @@ def discover_postgis_schema(
 DEFAULT_SEMANTIC_RULES: dict[str, dict[str, Any]] = {
     "park": {
         "labels": {
-            "fa": ["پارک", "بوستان", "فضای سبز"],
             "en": ["park", "green space"],
         },
         "geometry_preference": ["polygon", "point"],
@@ -648,13 +645,12 @@ DEFAULT_SEMANTIC_RULES: dict[str, dict[str, Any]] = {
             {"column": "leisure", "op": "eq", "value": "park"},
             {"column": "landuse", "op": "eq", "value": "grass"},
             {"column": "landuse", "op": "eq", "value": "recreation_ground"},
-            {"column": "name", "op": "ilike", "value": ["%پارک%", "%بوستان%", "%park%"]},
+            {"column": "name", "op": "ilike", "value": ["%park%", "%green space%"]},
             {"tag": "leisure", "op": "eq", "value": "park"},
         ],
     },
     "hospital": {
         "labels": {
-            "fa": ["بیمارستان", "درمانگاه", "مرکز درمانی"],
             "en": ["hospital", "clinic", "healthcare"],
         },
         "geometry_preference": ["polygon", "point"],
@@ -662,27 +658,25 @@ DEFAULT_SEMANTIC_RULES: dict[str, dict[str, Any]] = {
         "any": [
             {"column": "amenity", "op": "in", "value": ["hospital", "clinic", "doctors"]},
             {"column": "healthcare", "op": "exists"},
-            {"column": "name", "op": "ilike", "value": ["%بیمارستان%", "%درمانگاه%", "%hospital%", "%clinic%"]},
+            {"column": "name", "op": "ilike", "value": ["%hospital%", "%clinic%"]},
             {"tag": "amenity", "op": "in", "value": ["hospital", "clinic", "doctors"]},
             {"tag": "healthcare", "op": "exists"},
         ],
     },
     "school": {
         "labels": {
-            "fa": ["مدرسه", "دبستان", "دبیرستان", "آموزشگاه"],
             "en": ["school", "primary school", "high school"],
         },
         "geometry_preference": ["polygon", "point"],
         "tables_preference": ["planet_osm_polygon", "planet_osm_point"],
         "any": [
             {"column": "amenity", "op": "in", "value": ["school", "kindergarten", "college", "university"]},
-            {"column": "name", "op": "ilike", "value": ["%مدرسه%", "%دبستان%", "%دبیرستان%", "%school%"]},
+            {"column": "name", "op": "ilike", "value": ["%school%", "%college%"]},
             {"tag": "amenity", "op": "in", "value": ["school", "kindergarten", "college", "university"]},
         ],
     },
     "metro_station": {
         "labels": {
-            "fa": ["ایستگاه مترو", "مترو", "ورودی مترو"],
             "en": ["metro station", "subway station", "metro entrance", "subway entrance"],
         },
         "geometry_preference": ["point"],
@@ -692,7 +686,7 @@ DEFAULT_SEMANTIC_RULES: dict[str, dict[str, Any]] = {
             {"column": "railway", "op": "eq", "value": "subway_entrance"},
             {"column": "public_transport", "op": "eq", "value": "station"},
             {"column": "station", "op": "eq", "value": "subway"},
-            {"column": "name", "op": "ilike", "value": ["%مترو%", "%metro%", "%subway%"]},
+            {"column": "name", "op": "ilike", "value": ["%metro%", "%subway%"]},
             {"tag": "railway", "op": "eq", "value": "station"},
             {"tag": "railway", "op": "eq", "value": "subway_entrance"},
             {"tag": "station", "op": "eq", "value": "subway"},
@@ -701,7 +695,6 @@ DEFAULT_SEMANTIC_RULES: dict[str, dict[str, Any]] = {
     },
     "shopping_center": {
         "labels": {
-            "fa": ["مرکز خرید", "پاساژ", "مجتمع تجاری", "بازار"],
             "en": ["shopping center", "shopping centre", "shopping mall", "mall", "market"],
         },
         "geometry_preference": ["polygon", "point"],
@@ -711,7 +704,7 @@ DEFAULT_SEMANTIC_RULES: dict[str, dict[str, Any]] = {
             {"column": "amenity", "op": "eq", "value": "marketplace"},
             {"column": "building", "op": "eq", "value": "retail"},
             {"column": "landuse", "op": "eq", "value": "retail"},
-            {"column": "name", "op": "ilike", "value": ["%مرکز خرید%", "%پاساژ%", "%بازار%", "%mall%", "%shopping%"]},
+            {"column": "name", "op": "ilike", "value": ["%mall%", "%shopping%", "%market%"]},
             {"tag": "shop", "op": "eq", "value": "mall"},
             {"tag": "amenity", "op": "eq", "value": "marketplace"},
             {"tag": "building", "op": "eq", "value": "retail"},
@@ -720,20 +713,18 @@ DEFAULT_SEMANTIC_RULES: dict[str, dict[str, Any]] = {
     },
     "main_road": {
         "labels": {
-            "fa": ["جاده اصلی", "خیابان اصلی", "بزرگراه", "معبر اصلی"],
             "en": ["main road", "major road", "highway"],
         },
         "geometry_preference": ["line"],
         "tables_preference": ["planet_osm_roads", "planet_osm_line"],
         "any": [
             {"column": "highway", "op": "in", "value": ["motorway", "trunk", "primary", "secondary"]},
-            {"column": "name", "op": "ilike", "value": ["%بزرگراه%", "%اتوبان%", "%highway%"]},
+            {"column": "name", "op": "ilike", "value": ["%highway%", "%main road%"]},
             {"tag": "highway", "op": "in", "value": ["motorway", "trunk", "primary", "secondary"]},
         ],
     },
     "building": {
         "labels": {
-            "fa": ["ساختمان", "بنا", "ملک"],
             "en": ["building", "property"],
         },
         "geometry_preference": ["polygon"],

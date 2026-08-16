@@ -52,7 +52,7 @@ class ProductionResponseConfig:
     include_outputs: bool = True
     include_metadata: bool = True
     include_debug: bool = False
-    language: str = "fa"
+    language: str = "en"
 
     max_warnings: int = 20
     max_next_actions: int = 20
@@ -67,8 +67,8 @@ class ProductionResponseConfig:
         if self.max_next_actions < 0:
             raise ValueError("max_next_actions must be >= 0.")
 
-        if self.language not in {"fa", "en"}:
-            raise ValueError("language must be one of: fa, en.")
+        if self.language != "en":
+            raise ValueError("language must be en.")
 
 
 @dataclass(frozen=True)
@@ -685,21 +685,21 @@ class ProductionResponseBuilder:
 
 
 _FA_TEXTS = {
-    "execution_failed": "اجرای درخواست ناموفق بود.",
-    "error_detail": "جزئیات خطا",
-    "low_confidence": "اطمینان سیستم پایین است و ممکن است نتیجه نیاز به بازبینی داشته باشد.",
-    "ambiguous_routing": "چند مسیر پردازشی نزدیک به هم تشخیص داده شد؛ نتیجه ممکن است نیاز به بازبینی داشته باشد.",
-    "no_output_summary": "خلاصه خروجی در گزارش اجرا موجود نیست.",
-    "retry_or_review": "درخواست را دوباره اجرا کنید یا گزارش خطا را بررسی کنید.",
-    "check_inputs": "ورودی‌ها، پارامترها و داده‌های مکانی را بررسی کنید.",
-    "ask_user_clarification": "در صورت نیاز از کاربر سؤال تکمیلی بپرسید.",
-    "review_route": "مسیر انتخاب‌شده توسط Router را بازبینی کنید.",
-    "inspect_outputs": "خروجی‌های تولیدشده را روی نقشه یا در ابزار تحلیلی بررسی کنید.",
-    "review_warnings": "هشدارهای پاسخ را بررسی کنید.",
-    "failed_with_error": "در اجرای درخواست خطا رخ داد: {error}",
-    "failed": "در اجرای درخواست خطا رخ داد.",
-    "partial_success": "درخواست به صورت ناقص انجام شد و بخشی از خروجی‌ها آماده است.",
-    "success_generic": "درخواست با موفقیت انجام شد.",
+    "execution_failed": "Request execution failed.",
+    "error_detail": "Error details",
+    "low_confidence": "System confidence is low; review the result before use.",
+    "ambiguous_routing": "Multiple processing routes had similar confidence; review the selected result.",
+    "no_output_summary": "The execution report does not contain an output summary.",
+    "retry_or_review": "Retry the request or review the error report.",
+    "check_inputs": "Check the inputs, parameters, and spatial datasets.",
+    "ask_user_clarification": "Ask the user for clarification when needed.",
+    "review_route": "Review the route selected by the router.",
+    "inspect_outputs": "Inspect generated outputs on the map or in an analysis tool.",
+    "review_warnings": "Review the response warnings.",
+    "failed_with_error": "Request execution failed: {error}",
+    "failed": "Request execution failed.",
+    "partial_success": "The request completed partially and some outputs are available.",
+    "success_generic": "Request completed successfully.",
 }
 
 
@@ -739,26 +739,26 @@ def _persian_output_answer(outputs_summary: dict[str, Any]) -> str:
 
         if kind == "vector":
             if isinstance(feature_count, int):
-                parts.append(f"{feature_count} عارضه برداری برای «{label}» تولید شد.")
+                parts.append(f"Generated {feature_count} vector features for '{label}'.")
             else:
-                parts.append(f"خروجی برداری «{label}» تولید شد.")
+                parts.append(f"Generated vector output '{label}'.")
             continue
 
         if kind == "raster":
             if index_name:
-                parts.append(f"رستر {index_name} برای «{label}» تولید شد.")
+                parts.append(f"Generated {index_name} raster for '{label}'.")
             elif isinstance(valid_cell_count, int):
-                parts.append(f"رستر «{label}» با {valid_cell_count} سلول معتبر تولید شد.")
+                parts.append(f"Generated raster '{label}' with {valid_cell_count} valid cells.")
             elif isinstance(cell_count, int):
-                parts.append(f"رستر «{label}» با {cell_count} سلول تولید شد.")
+                parts.append(f"Generated raster '{label}' with {cell_count} cells.")
             else:
-                parts.append(f"خروجی رستری «{label}» تولید شد.")
+                parts.append(f"Generated raster output '{label}'.")
             continue
 
-        parts.append(f"خروجی «{label}» تولید شد.")
+        parts.append(f"Generated output '{label}'.")
 
     if not parts:
-        return "درخواست با موفقیت انجام شد."
+        return "Request completed successfully."
 
     return " ".join(parts)
 
@@ -803,9 +803,9 @@ def _english_output_answer(outputs_summary: dict[str, Any]) -> str:
 
 def _friendly_output_name(name: str) -> str:
     mapping = {
-        "vegetation_polygons": "پلیگون‌های پوشش گیاهی",
-        "thresholded_raster": "رستر آستانه‌گذاری‌شده",
-        "spectral_index": "شاخص طیفی",
+        "vegetation_polygons": "vegetation polygons",
+        "thresholded_raster": "thresholded raster",
+        "spectral_index": "spectral index",
         "ndvi": "NDVI",
     }
 

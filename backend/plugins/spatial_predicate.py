@@ -309,12 +309,6 @@ def _build_vector_metadata(features: list[dict[str, Any]]) -> dict[str, Any]:
         "spatial within",
         "points inside",
         "filter inside",
-        "داخل پلیگان",
-        "داخل محدوده",
-        "درون چندضلعی",
-        "نقاط داخل",
-        "محدوده مجاز",
-        "داخل ناحیه",
     ],
     description=(
         "Keep only point features that fall inside one or more polygon features "

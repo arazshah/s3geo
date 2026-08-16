@@ -137,9 +137,6 @@ def _to_bool(value: Any) -> bool:
             "inside",
             "within",
             "low",
-            "مجاز",
-            "داخل",
-            "بله",
         }
     return bool(value)
 
@@ -277,11 +274,6 @@ def _build_vector_metadata(features: list[dict[str, Any]], extra: dict[str, Any]
         "add property",
         "attribute enrichment",
         "feature enrichment",
-        "غنی سازی",
-        "افزودن فیلد",
-        "کپی فیلد",
-        "تغییر نام فیلد",
-        "ویژگی جدید",
     ],
     description=(
         "Derive/copy/rename feature properties using declarative rules. "
@@ -395,10 +387,6 @@ def enrich_feature_properties(
         "attribute join",
         "merge properties",
         "join by id",
-        "اتصال جدولی",
-        "اتصال ویژگی",
-        "ترکیب فیلدها",
-        "ادغام ویژگی‌ها",
     ],
     description="Join properties from right features into left features by matching property keys.",
     required_inputs=["left_features", "right_features"],

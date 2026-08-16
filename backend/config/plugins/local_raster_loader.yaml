@@ -8,6 +8,6 @@ allowed_extensions:
   - .img
   - .jp2
 
-# اگر خالی باشد، از همه مسیرها می‌تواند بخواند.
-# برای محیط production بهتر است محدود شود.
+# When empty, all paths are readable.
+# Restrict this list in production environments.
 allowed_roots: []

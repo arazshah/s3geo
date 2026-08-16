@@ -38,6 +38,7 @@ import {
   normalizeRankingRows
 } from "./utils/normalizers";
 import { extractGeoJson } from "./utils/geojson";
+import { cx } from "./utils/cx";
 
 type RightDockTab = "analysis" | "request-details";
 
@@ -1357,7 +1358,7 @@ function buildDynamicPlanningSteps(
 
   const districtMatch =
     queryText.match(/district\s*([0-9]+)/i) ||
-    queryText.match(/منطقه\s*([0-9]+)/i);
+    queryText.match(/district\s*([0-9]+)/i);
 
   const targetArea = districtMatch
     ? `District ${districtMatch[1]}`
@@ -3250,7 +3251,12 @@ export default function App() {
         />
 
         <div className="flex min-h-0 flex-1">
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <main
+            className={cx(
+              "flex min-h-0 min-w-0 flex-1 flex-col",
+              activeView === "ai-query" ? "overflow-y-auto" : "overflow-hidden"
+            )}
+          >
             {activeView === "ai-query" && (
 
               <TopQueryPanel
@@ -3281,7 +3287,14 @@ export default function App() {
               />
             )}
 
-            <div className="relative min-h-0 flex-1">
+            <div
+              className={cx(
+                "relative min-h-0",
+                activeView === "ai-query"
+                  ? "h-[50vh] min-h-[420px] shrink-0"
+                  : "flex-1"
+              )}
+            >
               <MapView
                 layers={layerItems}
                 onToggleLayer={toggleLayer}

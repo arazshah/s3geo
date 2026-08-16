@@ -302,18 +302,6 @@ def _try_load_inline_json_raster(path: str) -> "dict | None":
         "orthophoto",
 
         # Persian keywords
-        "رستر",
-        "ژئوتیف",
-        "جئوتیف",
-        "تصویر رستری",
-        "تصویر ماهواره‌ای",
-        "تصویر ماهواره ای",
-        "فایل رستر",
-        "بارگذاری رستر",
-        "خواندن رستر",
-        "باز کردن رستر",
-        "دم",
-        "مدل رقومی ارتفاع",
     ],
     description=(
         "Load a local raster file such as GeoTIFF, validate it, extract spatial "
