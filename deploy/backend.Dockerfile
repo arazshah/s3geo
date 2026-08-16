@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
@@ -15,14 +15,19 @@ RUN apt-get update \
        gdal-bin \
        libgdal-dev \
        libgeos-dev \
+       libharfbuzz-subset0 \
+       libpango-1.0-0 \
+       libpangoft2-1.0-0 \
        libproj-dev \
+       fonts-dejavu-core \
        proj-bin \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/ /app/
 
 RUN python -m pip install --upgrade pip \
-    && python -m pip install ".[geo]"
+    && python -m pip install ".[geo,pdf]" \
+    && python -c "from weasyprint import HTML; assert HTML(string='<p>PDF smoke test</p>').write_pdf()[:4] == b'%PDF'"
 
 RUN mkdir -p \
     /app/var/outputs \

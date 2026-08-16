@@ -72,3 +72,16 @@ def test_local_sdk_and_kernel_packages_are_included_in_package_discovery() -> No
     assert "smart_spatial_system*" in include
     assert "geochat_sdk*" in include
     assert "geochat_kernel*" in include
+
+
+def test_backend_container_installs_pdf_runtime() -> None:
+    dockerfile = (
+        Path(__file__).resolve().parents[2] / "deploy" / "backend.Dockerfile"
+    ).read_text(encoding="utf-8")
+
+    assert dockerfile.startswith("FROM python:3.12-slim-bookworm\n")
+    assert 'python -m pip install ".[geo,pdf]"' in dockerfile
+    assert "libpango-1.0-0" in dockerfile
+    assert "libpangoft2-1.0-0" in dockerfile
+    assert "libharfbuzz-subset0" in dockerfile
+    assert "from weasyprint import HTML" in dockerfile
