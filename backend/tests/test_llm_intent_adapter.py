@@ -53,6 +53,21 @@ def test_apply_intent_to_query_rewrites_vegetation_extraction() -> None:
     assert "original_query: پوشش گیاهی را استخراج کن" in result
 
 
+def test_apply_intent_to_query_does_not_force_raster_for_vector_only_intent() -> None:
+    query = "Analyze the uploaded GeoJSON and summarize its attributes"
+
+    result = apply_intent_to_query(
+        query,
+        {
+            "intent_name": "vegetation_extraction",
+            "required_inputs": {"raster": False, "vector": True},
+            "parameters": {"threshold": 0.3, "vectorize": True},
+        },
+    )
+
+    assert result == query
+
+
 def test_apply_intent_to_query_uses_default_threshold_on_invalid_value() -> None:
     result = apply_intent_to_query(
         "پوشش گیاهی را استخراج کن",

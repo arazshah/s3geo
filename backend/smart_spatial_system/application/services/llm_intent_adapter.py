@@ -40,6 +40,13 @@ def apply_intent_to_query(
     intent_name = str(intent.get("intent_name") or "")
 
     if intent_name == "vegetation_extraction":
+        # Do not turn an ambiguous or contradictory LLM result into a raster
+        # workflow.  In particular, a vector-only request may be mislabeled as
+        # vegetation_extraction while explicitly declaring raster=False.
+        required_inputs = intent.get("required_inputs")
+        if isinstance(required_inputs, dict) and required_inputs.get("raster") is False:
+            return query
+
         params = intent.get("parameters") or {}
 
         try:
