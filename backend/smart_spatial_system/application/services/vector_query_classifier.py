@@ -114,6 +114,51 @@ def is_vector_summary_query(
     """
     q = str(query or "").strip().lower()
 
+    # A request that asks for a multi-step analysis must reach the planner.
+    # Broad summary tokens such as "report" and "features" otherwise route
+    # complex workflows to the two-step inspect/summarize shortcut, silently
+    # dropping ranking, spatial, and artifact-generation requirements.
+    complex_analysis_tokens = [
+        "filter",
+        "rank",
+        "ranking",
+        "top ",
+        "intersect",
+        "intersection",
+        "spatial join",
+        "spatial analysis",
+        "buffer",
+        "centroid",
+        "perimeter",
+        "area",
+        "priority",
+        "hazard",
+        "subsidence",
+        "affected assets",
+        "geojson layer",
+        "pdf",
+        "report generation",
+        "generate a report",
+        "generate all",
+        "phase 1",
+        "phase 2",
+        "phase 3",
+        "phase 4",
+        "phase 5",
+        "phase 6",
+        "phase 7",
+        "تحلیل",
+        "رتبه",
+        "تقاطع",
+        "بافر",
+        "اولویت",
+        "خطر",
+        "فرونشست",
+        "گزارش pdf",
+    ]
+    if any(token in q for token in complex_analysis_tokens):
+        return False
+
     summary_tokens = [
         "تعداد",
         "چند",
