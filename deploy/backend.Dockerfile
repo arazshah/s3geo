@@ -8,18 +8,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends \
-       build-essential \
+RUN apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 update \
+    && apt-get -o Acquire::Retries=5 -o Acquire::http::Timeout=60 install -y --no-install-recommends \
        curl \
        gdal-bin \
-       libgdal-dev \
-       libgeos-dev \
+       fonts-dejavu-core \
        libharfbuzz-subset0 \
        libpango-1.0-0 \
        libpangoft2-1.0-0 \
-       libproj-dev \
-       fonts-dejavu-core \
        proj-bin \
     && rm -rf /var/lib/apt/lists/*
 
