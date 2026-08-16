@@ -121,6 +121,14 @@ def _add_filename_based_runtime_input_aliases(
                     runtime_inputs[alias] = role_value
                     aliases_added[alias] = role
 
+    # Some generated QuerySpecs use a generic logical name for the sole
+    # uploaded GeoJSON instead of the canonical ``vector`` input.  Keep this
+    # compatibility alias only when there is exactly one hydrated vector input;
+    # it must never select between multiple datasets.
+    if "vector" in runtime_inputs and "uploaded_geojson" not in runtime_inputs:
+        runtime_inputs["uploaded_geojson"] = runtime_inputs["vector"]
+        aliases_added["uploaded_geojson"] = "vector"
+
     if aliases_added:
         final_metadata["runtime_input_aliases_added"] = aliases_added
         final_metadata["runtime_input_alias_names"] = sorted(aliases_added.keys())
