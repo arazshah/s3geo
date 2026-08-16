@@ -85,3 +85,8 @@ def test_backend_container_installs_pdf_runtime() -> None:
     assert "libpangoft2-1.0-0" in dockerfile
     assert "libharfbuzz-subset0" in dockerfile
     assert "from weasyprint import HTML" in dockerfile
+    assert "Acquire::Retries=5" in dockerfile
+    assert "build-essential" not in dockerfile
+    assert "libgdal-dev" not in dockerfile
+    assert "libgeos-dev" not in dockerfile
+    assert "libproj-dev" not in dockerfile
