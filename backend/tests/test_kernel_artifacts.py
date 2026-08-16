@@ -184,6 +184,26 @@ def test_output_to_artifact_detects_download_dict() -> None:
     assert artifact.payload["path"] == "/tmp/report.pdf"
 
 
+def test_output_to_artifact_uses_structured_to_dict_contract() -> None:
+    class StructuredReport:
+        def to_dict(self):
+            return {
+                "title": "Hazard report",
+                "summary": {"count": 1},
+                "table": {"rows": [{"rank": 1}]},
+                "sections": [],
+            }
+
+    artifact = output_to_artifact(
+        StructuredReport(),
+        source_node="hazard_report",
+    )
+
+    assert artifact.kind == "report"
+    assert artifact.payload["data"]["table"]["rows"] == [{"rank": 1}]
+    assert artifact.metadata["input_type"] == "StructuredReport"
+
+
 def test_output_to_artifact_detects_raster_reference_dict() -> None:
     value = {
         "name": "slope",

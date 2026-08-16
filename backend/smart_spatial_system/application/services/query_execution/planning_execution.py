@@ -121,6 +121,22 @@ def _add_filename_based_runtime_input_aliases(
                     runtime_inputs[alias] = role_value
                     aliases_added[alias] = role
 
+    # 3) The AI Query frontend sends selected vector titles separately from
+    # role bindings.  A QuerySpec may legitimately use the uploaded filename
+    # stem as its entity ref (for example ``isfahan_subsidence_scenario``).
+    # When one canonical vector is hydrated, bind those title aliases to it.
+    selected_titles = _as_dict(metadata).get("frontend_selected_data_source_titles")
+    if "vector" in runtime_inputs and isinstance(selected_titles, list):
+        non_empty_titles = [
+            title for title in selected_titles
+            if isinstance(title, str) and title.strip()
+        ]
+        if len(non_empty_titles) == 1:
+            for alias in _alias_candidates_from_title(non_empty_titles[0]):
+                if alias and alias not in runtime_inputs:
+                    runtime_inputs[alias] = runtime_inputs["vector"]
+                    aliases_added[alias] = "vector"
+
     # Some generated QuerySpecs use a generic logical name for the sole
     # uploaded GeoJSON instead of the canonical ``vector`` input.  Keep this
     # compatibility alias only when there is exactly one hydrated vector input;
@@ -132,6 +148,56 @@ def _add_filename_based_runtime_input_aliases(
     if aliases_added:
         final_metadata["runtime_input_aliases_added"] = aliases_added
         final_metadata["runtime_input_alias_names"] = sorted(aliases_added.keys())
+
+
+def _add_single_vector_query_ref_aliases(
+    runtime_inputs: dict[str, Any],
+    *,
+    query_spec: Any,
+    final_metadata: dict[str, Any],
+) -> None:
+    """Bind unresolved explicit vector-role refs to the sole vector input.
+
+    Uploaded datasets are sometimes represented in frontend context only by an
+    upload id, while the LLM legitimately refers to the filename mentioned in
+    the query.  Filename-based aliases cannot help in that case.  This repair
+    is safe only because the operation role is explicitly ``vector`` and there
+    is exactly one canonical hydrated vector; it never chooses among multiple
+    datasets or rewrites source/target/mask roles.
+    """
+    if "vector" not in runtime_inputs:
+        return
+
+    operations = getattr(query_spec, "operations", None) or []
+    produced_refs = {
+        str(getattr(operation, "output", ""))
+        for operation in operations
+        if getattr(operation, "output", None)
+    }
+    aliases_added: dict[str, str] = {}
+
+    for operation in operations:
+        inputs = getattr(operation, "inputs", None)
+        if not isinstance(inputs, dict):
+            continue
+
+        ref = inputs.get("vector")
+        if not isinstance(ref, str) or not ref.strip():
+            continue
+
+        ref = ref.strip()
+        if ref in runtime_inputs or ref in produced_refs:
+            continue
+
+        runtime_inputs[ref] = runtime_inputs["vector"]
+        aliases_added[ref] = "vector"
+
+    if aliases_added:
+        existing = final_metadata.get("runtime_input_aliases_added")
+        merged = dict(existing) if isinstance(existing, dict) else {}
+        merged.update(aliases_added)
+        final_metadata["runtime_input_aliases_added"] = merged
+        final_metadata["runtime_input_alias_names"] = sorted(merged.keys())
 
 
 
@@ -172,6 +238,11 @@ def execute_query_spec_planning(
         planning_runtime_inputs,
         user_context=user_context,
         metadata=metadata,
+        final_metadata=final_metadata,
+    )
+    _add_single_vector_query_ref_aliases(
+        planning_runtime_inputs,
+        query_spec=query_spec,
         final_metadata=final_metadata,
     )
 

@@ -133,9 +133,18 @@ def _get_props(feature: Any) -> dict[str, Any]:
 def _resolve_report_spec(
     report_spec: Any,
     ranked_source: str,
+    *,
+    score_field: str = "investment_score",
+    rank_field: str = "rank",
+    name_field: str = "name",
 ) -> ReportSpec:
     if report_spec is None:
-        return default_ranked_features_report_spec(ranked_source=ranked_source)
+        return default_ranked_features_report_spec(
+            ranked_source=ranked_source,
+            score_field=score_field,
+            rank_field=rank_field,
+            name_field=name_field,
+        )
 
     if isinstance(report_spec, ReportSpec):
         return report_spec
@@ -556,6 +565,9 @@ def build_report(
     spec = _resolve_report_spec(
         report_spec,
         ranked_source=rank_field,
+        score_field=score_field,
+        rank_field=rank_field,
+        name_field=name_field,
     )
 
     original_score_field = score_field

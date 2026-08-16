@@ -141,6 +141,49 @@ def test_output_storage_reads_manifest_and_lists_files(tmp_path: Path) -> None:
     assert any(item["filename"] == "manifest.json" for item in files)
 
 
+def test_output_storage_persists_generated_pdf_and_exposes_download_url(
+    tmp_path: Path,
+) -> None:
+    generated_pdf = tmp_path / "temporary-render.pdf"
+    generated_pdf.write_bytes(b"%PDF-1.7\nexample")
+    storage = OutputStorage(
+        OutputStorageConfig(root_dir=tmp_path / "outputs")
+    )
+
+    manifest = storage.save_request_record(
+        {
+            "request_id": "req-pdf-001",
+            "production_response": {
+                "status": "success",
+                "outputs": {
+                    "files": [
+                        {
+                            "name": "hazard_report.pdf",
+                            "path": str(generated_pdf),
+                            "format": "pdf",
+                        }
+                    ],
+                    "documents": [],
+                },
+            },
+            "audit_record": {},
+            "run_result": {},
+        }
+    )
+
+    pdf_info = next(
+        item for item in manifest["files"]
+        if item["filename"] == "hazard_report.pdf"
+    )
+    assert pdf_info["kind"] == "pdf"
+    assert pdf_info["download_url"] == (
+        "/api/v1/requests/req-pdf-001/outputs/files/hazard_report.pdf"
+    )
+    assert storage.get_file_path(
+        "req-pdf-001", "hazard_report.pdf"
+    ).read_bytes().startswith(b"%PDF")
+
+
 def test_output_storage_rejects_missing_manifest(tmp_path: Path) -> None:
     storage = OutputStorage(
         OutputStorageConfig(

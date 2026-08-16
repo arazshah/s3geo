@@ -1647,6 +1647,41 @@ function findFirstCollectionByKeys(payload: unknown, keys: string[]) {
 }
 
 function getRankingRows(payload: unknown) {
+  const queue: unknown[] = [payload];
+  const visited = new WeakSet<object>();
+
+  while (queue.length) {
+    const value = queue.shift();
+    if (!isRecord(value) || visited.has(value)) continue;
+    visited.add(value);
+
+    const candidates = [
+      value.rows,
+      isRecord(value.data) ? value.data.rows : undefined,
+      isRecord(value.data) && isRecord(value.data.table)
+        ? value.data.table.rows
+        : undefined
+    ];
+
+    for (const candidate of candidates) {
+      if (
+        Array.isArray(candidate)
+        && candidate.some(
+          (row) => isRecord(row) && row.rank !== undefined && row.rank !== ""
+        )
+      ) {
+        return candidate.filter(
+          (row) => isRecord(row) && row.rank !== undefined && row.rank !== ""
+        );
+      }
+    }
+
+    for (const child of Object.values(value)) {
+      if (isRecord(child)) queue.push(child);
+      if (Array.isArray(child)) queue.push(...child.filter(isRecord));
+    }
+  }
+
   const rankingRows = findFirstCollectionByKeys(payload, [
     "ranking_table",
     "rankingTable",

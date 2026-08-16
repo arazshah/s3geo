@@ -106,6 +106,26 @@ def test_rank_features_descending():
     assert result.features[1]["properties"]["investment_rank"] == 2
 
 
+def test_rank_features_supports_deterministic_multi_field_order():
+    features = {
+        "type": "FeatureCollection",
+        "features": [
+            {"type": "Feature", "geometry": None, "properties": {"id": "B", "rate": 90, "probability": 0.7, "priority": 2}},
+            {"type": "Feature", "geometry": None, "properties": {"id": "A", "rate": 90, "probability": 0.9, "priority": 3}},
+            {"type": "Feature", "geometry": None, "properties": {"id": "C", "rate": 40, "probability": 0.8, "priority": 1}},
+        ],
+    }
+
+    result = rank_features(
+        features,
+        sort_by=["rate", "probability", "priority"],
+        order=["desc", "desc", "asc"],
+    )
+
+    assert [feature["properties"]["id"] for feature in result.features] == ["A", "B", "C"]
+    assert [feature["properties"]["rank"] for feature in result.features] == [1, 2, 3]
+
+
 def test_op_catalog_contains_feature_scoring_ops():
     assert is_supported("score_features")
     assert is_supported("rank_features")

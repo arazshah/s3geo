@@ -419,6 +419,28 @@ def _repair_vector_input_aliases(op_item: dict[str, Any]) -> dict[str, Any]:
     return op_copy
 
 
+def _repair_filter_attribute_params(op_item: dict[str, Any]) -> dict[str, Any]:
+    """Convert common LLM ``attribute``/``value`` filters to ``where``."""
+    op_copy = dict(op_item)
+    if str(op_copy.get("op") or "") != "filter_attribute":
+        return op_copy
+
+    params = op_copy.get("params")
+    if not isinstance(params, dict) or "where" in params:
+        return op_copy
+
+    attribute = params.get("attribute")
+    if not isinstance(attribute, str) or not attribute.strip() or "value" not in params:
+        return op_copy
+
+    repaired_params = dict(params)
+    value = repaired_params.pop("value")
+    repaired_params.pop("attribute", None)
+    repaired_params["where"] = {attribute.strip(): value}
+    op_copy["params"] = repaired_params
+    return op_copy
+
+
 def _existing_operation_outputs(operations: list[Any]) -> set[str]:
     outputs: set[str] = set()
     for op in operations:
@@ -817,6 +839,7 @@ def _pre_normalize_query_spec_json(data: dict[str, Any], *, context: dict[str, A
             op_copy = _repair_query_database_operation_shape(op_copy)
             op_copy = _repair_query_database_from_semantic_context(op_copy, context)
             op_copy = _repair_vector_input_aliases(op_copy)
+            op_copy = _repair_filter_attribute_params(op_copy)
 
             new_operations.append(op_copy)
 
@@ -1434,6 +1457,31 @@ def _is_nearest_distance_only_workflow(spec: QuerySpec) -> bool:
     )
 
 
+def _explicit_rank_order_from_query(raw_query: str) -> tuple[list[str], list[str]]:
+    """Extract an explicitly enumerated ``field asc/desc`` ranking rule.
+
+    This is intentionally narrow.  It only accepts identifier-like field names
+    immediately followed by an ordering word, so narrative mentions elsewhere
+    in the prompt cannot silently become ranking criteria.
+    """
+    matches = re.findall(
+        r"(?im)^\s*(?:\d+[.)-]?\s*)?"
+        r"([A-Za-z_][A-Za-z0-9_]*)\s+"
+        r"(ascending|descending|asc|desc)\s*[;,.]?\s*$",
+        str(raw_query or ""),
+    )
+
+    fields: list[str] = []
+    order: list[str] = []
+    for field_name, direction in matches:
+        if field_name in fields:
+            continue
+        fields.append(field_name)
+        order.append("asc" if direction.lower() in {"asc", "ascending"} else "desc")
+
+    return fields, order
+
+
 def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
     """
     Harden and improve LLM-produced QuerySpec before deterministic planning.
@@ -1452,6 +1500,12 @@ def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
     normalized_ops: list[OperationSpec] = []
 
     used_refs: set[str] = set()
+    report_output_refs = {
+        str(operation.output)
+        for operation in spec.operations
+        if operation.op == "build_report" and operation.output
+    }
+    rank_params_by_output: dict[str, dict[str, Any]] = {}
     for op in spec.operations:
         if op.output:
             used_refs.add(op.output)
@@ -1466,9 +1520,13 @@ def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
     )
 
     nearest_distance_only = _is_nearest_distance_only_workflow(spec)
+    explicit_rank_fields, explicit_rank_order = _explicit_rank_order_from_query(
+        spec.raw_query
+    )
 
     last_score_field: str | None = None
     ref_rewrites: dict[str, str] = {}
+    pending_rank_sort_fields: list[str] | None = None
 
     for op in spec.operations:
         # Unknown operations stay unchanged so Planner can raise clear errors.
@@ -1485,6 +1543,16 @@ def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
             if role in allowed_roles:
                 ref_str = str(ref)
                 clean_inputs[role] = ref_rewrites.get(ref_str, ref_str)
+            elif (
+                op.op == "render_pdf"
+                and role in {"vector", "features", "source"}
+                and str(ref) in report_output_refs
+                and "report" in allowed_roles
+            ):
+                clean_inputs["report"] = str(ref)
+                repairs.append(
+                    f"reinterpreted render_pdf input role {role!r} as 'report'"
+                )
             else:
                 repairs.append(
                     f"removed unsupported input role {role!r} from operation {op.op!r}"
@@ -1506,6 +1574,37 @@ def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
                 continue
 
         if op.op == "score_features":
+            requested_fields = clean_params.get("fields")
+            if (
+                explicit_rank_fields
+                and "factors" not in clean_params
+                and "scoring_spec" not in clean_params
+            ):
+                source_ref = clean_inputs.get("vector")
+                pending_rank_sort_fields = list(explicit_rank_fields)
+                if op.output and source_ref:
+                    ref_rewrites[str(op.output)] = source_ref
+                repairs.append(
+                    "removed formula-free score_features and preserved explicit query ranking order"
+                )
+                continue
+
+            if (
+                isinstance(requested_fields, list)
+                and requested_fields
+                and all(isinstance(field, str) and field.strip() for field in requested_fields)
+                and "factors" not in clean_params
+                and "scoring_spec" not in op.params
+            ):
+                source_ref = clean_inputs.get("vector")
+                pending_rank_sort_fields = [field.strip() for field in requested_fields]
+                if op.output and source_ref:
+                    ref_rewrites[str(op.output)] = source_ref
+                repairs.append(
+                    "removed score_features with field ordering but no explicit scoring formula"
+                )
+                continue
+
             if "scoring_spec" not in clean_params and "factors" not in clean_params:
                 clean_params["scoring_spec"] = _default_ranked_feature_scoring_spec()
                 repairs.append("added default scoring_spec to score_features")
@@ -1521,6 +1620,63 @@ def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
                 last_score_field = str(clean_params.get("output_field") or "score")
 
         if op.op == "rank_features":
+            raw_sort_by = clean_params.get("sort_by")
+            if (
+                isinstance(raw_sort_by, list)
+                and raw_sort_by
+                and all(isinstance(item, dict) for item in raw_sort_by)
+            ):
+                sort_fields: list[str] = []
+                sort_directions: list[str] = []
+                valid_structured_sort = True
+
+                for item in raw_sort_by:
+                    field_name = item.get("field") or item.get("name")
+                    direction = str(
+                        item.get("order") or item.get("direction") or "desc"
+                    ).strip().lower()
+                    if not isinstance(field_name, str) or not field_name.strip():
+                        valid_structured_sort = False
+                        break
+                    if direction not in {"asc", "ascending", "desc", "descending"}:
+                        valid_structured_sort = False
+                        break
+                    sort_fields.append(field_name.strip())
+                    sort_directions.append(
+                        "asc" if direction in {"asc", "ascending"} else "desc"
+                    )
+
+                if valid_structured_sort:
+                    clean_params["sort_by"] = sort_fields
+                    clean_params["order"] = sort_directions
+                    repairs.append(
+                        "normalized structured rank_features.sort_by to field and order lists"
+                    )
+
+            if pending_rank_sort_fields and "sort_by" not in clean_params:
+                clean_params["sort_by"] = list(pending_rank_sort_fields)
+                raw_order = clean_params.get("order")
+                valid_directions = (
+                    isinstance(raw_order, list)
+                    and len(raw_order) == len(pending_rank_sort_fields)
+                    and all(str(item).lower() in {"asc", "desc"} for item in raw_order)
+                )
+                if not valid_directions:
+                    clean_params["order"] = (
+                        list(explicit_rank_order)
+                        if pending_rank_sort_fields == explicit_rank_fields
+                        else [
+                            "asc"
+                            if any(token in field.lower() for token in ("priority", "distance", "cost", "time"))
+                            else "desc"
+                            for field in pending_rank_sort_fields
+                        ]
+                    )
+                clean_params["score_field"] = pending_rank_sort_fields[0]
+                repairs.append(
+                    "converted score_features.fields to deterministic multi-field rank_features sorting"
+                )
+
             if _should_use_nearest_distance_for_rank_or_report(
                 clean_inputs=clean_inputs,
                 clean_params=clean_params,
@@ -1562,6 +1718,28 @@ def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
                     clean_params["rank_field"] = "rank"
                     repairs.append("added rank_field='rank' to build_report")
 
+            vector_ref = clean_inputs.get("vector")
+            upstream_rank = rank_params_by_output.get(str(vector_ref or ""))
+            if upstream_rank:
+                upstream_sort = upstream_rank.get("sort_by")
+                upstream_score = upstream_rank.get("score_field")
+                if (
+                    _is_weak_or_default_score_field(upstream_score)
+                    and isinstance(upstream_sort, list)
+                    and upstream_sort
+                ):
+                    upstream_score = upstream_sort[0]
+                current_score = clean_params.get("score_field")
+                if upstream_score and current_score in {None, "score", "investment_score"}:
+                    clean_params["score_field"] = str(upstream_score)
+                    repairs.append(
+                        f"aligned build_report.score_field with upstream rank field {upstream_score!r}"
+                    )
+                if "rank_field" not in clean_params:
+                    clean_params["rank_field"] = str(
+                        upstream_rank.get("rank_field") or "rank"
+                    )
+
         normalized_op = OperationSpec(
             op=op.op,
             inputs=clean_inputs,
@@ -1569,6 +1747,23 @@ def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
             output=op.output,
         )
         normalized_ops.append(normalized_op)
+
+        if op.op == "rank_features" and op.output:
+            rank_params_by_output[str(op.output)] = dict(clean_params)
+        elif op.output:
+            # Ranking metadata must follow vector-preserving operations such as
+            # filters and top-N selection. Reports commonly consume one of
+            # those derived outputs instead of the rank node directly.
+            ranked_input = next(
+                (
+                    rank_params_by_output[ref]
+                    for ref in clean_inputs.values()
+                    if ref in rank_params_by_output
+                ),
+                None,
+            )
+            if ranked_input is not None:
+                rank_params_by_output[str(op.output)] = dict(ranked_input)
 
         if not should_inject_enrichment:
             continue
@@ -1832,12 +2027,10 @@ def _inject_report_pipeline(spec: QuerySpec) -> tuple[QuerySpec, list[str]]:
         f"auto-injected build_report after {last_rank_output!r}"
     )
 
-    # render_pdf node if format is pdf
     want_pdf = any(
-        o.format == "pdf" or o.kind == "pdf"
-        for o in spec.outputs
+        output.format == "pdf" or output.kind == "pdf"
+        for output in spec.outputs
     )
-
     final_output = report_output
 
     if want_pdf:
@@ -1851,18 +2044,17 @@ def _inject_report_pipeline(spec: QuerySpec) -> tuple[QuerySpec, list[str]]:
         repairs.append("auto-injected render_pdf for PDF output")
         final_output = pdf_output
 
-    # Update output sources.
     new_outputs: list[OutputSpec] = []
-    for out in spec.outputs:
-        if out.kind in {"report", "pdf"} or out.format in {"pdf", "html"}:
+    for output in spec.outputs:
+        if output.kind in {"report", "pdf"} or output.format in {"pdf", "html"}:
             new_outputs.append(OutputSpec(
-                kind=out.kind,
+                kind=output.kind,
                 source=final_output,
-                format=out.format,
-                config=out.config,
+                format=output.format,
+                config=output.config,
             ))
         else:
-            new_outputs.append(out)
+            new_outputs.append(output)
 
     return (
         QuerySpec(
@@ -1878,6 +2070,92 @@ def _inject_report_pipeline(spec: QuerySpec) -> tuple[QuerySpec, list[str]]:
     )
 
 
+def _ensure_existing_reports_have_pdf_outputs(
+    spec: QuerySpec,
+) -> tuple[QuerySpec, list[str]]:
+    """Materialize PDF outputs that point directly at existing ReportOut nodes."""
+    report_sources = {
+        str(operation.output)
+        for operation in spec.operations
+        if operation.op == "build_report" and operation.output
+    }
+    render_by_report = {
+        str(operation.inputs.get("report")): str(operation.output)
+        for operation in spec.operations
+        if operation.op == "render_pdf"
+        and operation.inputs.get("report")
+        and operation.output
+    }
+    if not report_sources:
+        return spec, []
+
+    used_refs = {
+        str(operation.output)
+        for operation in spec.operations
+        if operation.output
+    }
+    operations = list(spec.operations)
+    outputs: list[OutputSpec] = []
+    repairs: list[str] = []
+    preserved_reports: set[str] = set()
+
+    for output in spec.outputs:
+        source = str(output.source or "")
+        if output.format != "pdf" or source not in report_sources:
+            outputs.append(output)
+            continue
+
+        if source not in preserved_reports:
+            outputs.append(
+                OutputSpec(
+                    kind="report",
+                    source=source,
+                    format="json",
+                    config={},
+                )
+            )
+            preserved_reports.add(source)
+
+        pdf_source = render_by_report.get(source)
+        if not pdf_source:
+            pdf_source = _unique_ref(f"{source}_pdf", used_refs)
+            operations.append(
+                OperationSpec(
+                    op="render_pdf",
+                    inputs={"report": source},
+                    params={"save_to_disk": True},
+                    output=pdf_source,
+                )
+            )
+            render_by_report[source] = pdf_source
+            repairs.append(
+                f"injected render_pdf for existing report output {source!r}"
+            )
+
+        outputs.append(
+            OutputSpec(
+                kind=output.kind,
+                source=pdf_source,
+                format="pdf",
+                config=output.config,
+            )
+        )
+
+    if not repairs and outputs == spec.outputs:
+        return spec, []
+
+    return (
+        QuerySpec(
+            raw_query=spec.raw_query,
+            goal=spec.goal,
+            entities=spec.entities,
+            operations=operations,
+            outputs=outputs,
+            source=spec.source,
+            metadata=spec.metadata,
+        ),
+        repairs,
+    )
 
 class LLMQuerySpecGenerator:
     def __init__(
@@ -1953,6 +2231,13 @@ def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
     repairs: list[str] = []
     ref_rewrites: dict[str, str] = {}
     cleaned_ops: list[OperationSpec] = []
+    last_report_output: str | None = None
+    mislabeled_geojson_reports: dict[str, str] = {}
+    inspect_output_sources = {
+        op.output: op.inputs.get("vector")
+        for op in normalized.operations
+        if op.op == "inspect_vector" and op.output and op.inputs.get("vector")
+    }
 
     def rewrite_ref(ref: str) -> str:
         seen: set[str] = set()
@@ -1967,6 +2252,43 @@ def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
             role: rewrite_ref(str(ref))
             for role, ref in op.inputs.items()
         }
+        rewritten_params = dict(op.params)
+
+        if (
+            op.op == "render_pdf"
+            and "report" not in rewritten_inputs
+            and last_report_output
+        ):
+            rewritten_inputs["report"] = last_report_output
+            repairs.append(
+                f"bound render_pdf.report to preceding report {last_report_output!r}"
+            )
+
+        if op.op == "render_pdf" and "save_to_disk" not in rewritten_params:
+            rewritten_params["save_to_disk"] = True
+            repairs.append("set render_pdf.save_to_disk=True")
+
+        if op.op == "build_report":
+            vector_ref = rewritten_inputs.get("vector")
+            if vector_ref in inspect_output_sources:
+                rewritten_inputs["vector"] = str(inspect_output_sources[vector_ref])
+                repairs.append(
+                    f"rewrote build_report vector input from inspect output {vector_ref!r} "
+                    f"to source vector {rewritten_inputs['vector']!r}"
+                )
+
+            output_name = str(op.output or "").lower()
+            if vector_ref and (
+                output_name.endswith("_geojson")
+                or output_name.endswith("_geo_json")
+            ):
+                mislabeled_geojson_reports[str(op.output)] = str(vector_ref)
+                ref_rewrites[str(op.output)] = str(vector_ref)
+                repairs.append(
+                    f"removed build_report mislabeled as GeoJSON output {op.output!r} "
+                    f"and selected source vector {vector_ref!r}"
+                )
+                continue
 
         # Remove invalid enrichment nodes with no usable rules.
         if op.op == "enrich_feature_properties":
@@ -1993,16 +2315,67 @@ def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
             OperationSpec(
                 op=op.op,
                 inputs=rewritten_inputs,
-                params=op.params,
+                params=rewritten_params,
                 output=op.output,
             )
         )
 
+        if op.op == "build_report" and op.output:
+            last_report_output = op.output
+
+    render_output_by_report = {
+        str(op.inputs.get("report")): str(op.output)
+        for op in cleaned_ops
+        if op.op == "render_pdf" and op.inputs.get("report") and op.output
+    }
+
     cleaned_outputs: list[OutputSpec] = []
     for output in normalized.outputs:
-        source = output.source
+        original_source = output.source
+        source = original_source
         if source:
             source = rewrite_ref(source)
+
+        if original_source in mislabeled_geojson_reports:
+            cleaned_outputs.append(
+                OutputSpec(
+                    kind="vector",
+                    source=source,
+                    format="geojson",
+                    config=output.config,
+                )
+            )
+            repairs.append(
+                f"reclassified mislabeled report output {original_source!r} as GeoJSON vector"
+            )
+            continue
+
+        # A PDF output must select the render_pdf node, not its preceding
+        # build_report node.  LLMs frequently describe this as kind=report,
+        # format=pdf while pointing at ReportOut, which executes PDF rendering
+        # but drops the resulting PDFOut from DagExecutionResult.output_nodes.
+        if output.format == "pdf" and source in render_output_by_report:
+            report_source = source
+            source = render_output_by_report[source]
+            repairs.append(
+                f"rewrote PDF output source from {report_source!r} to {source!r}"
+            )
+
+            if not any(
+                existing.source == report_source
+                for existing in cleaned_outputs
+            ):
+                cleaned_outputs.append(
+                    OutputSpec(
+                        kind="report",
+                        source=report_source,
+                        format="json",
+                        config={},
+                    )
+                )
+                repairs.append(
+                    f"preserved structured report output {report_source!r} alongside PDF"
+                )
 
         cleaned_outputs.append(
             OutputSpec(
@@ -2011,6 +2384,53 @@ def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
                 format=output.format,
                 config=output.config,
             )
+        )
+
+    selected_sources = {output.source for output in cleaned_outputs if output.source}
+    for operation in cleaned_ops:
+        if operation.op != "build_report" or not operation.output:
+            continue
+        report_name = str(operation.output).lower()
+        vector_source = operation.inputs.get("vector")
+        if (
+            "high_priority" in report_name
+            and vector_source
+            and vector_source not in selected_sources
+        ):
+            cleaned_outputs.append(
+                OutputSpec(
+                    kind="vector",
+                    source=str(vector_source),
+                    format="geojson",
+                    config={},
+                )
+            )
+            selected_sources.add(str(vector_source))
+            repairs.append(
+                f"preserved high-priority report source {vector_source!r} as GeoJSON output"
+            )
+
+    for operation in cleaned_ops:
+        output_ref = str(operation.output or "")
+        if not output_ref or "high_priority" not in output_ref.lower():
+            continue
+        if operation.op in {"build_report", "render_pdf"}:
+            continue
+        if get_op(operation.op).output_type != "vector":
+            continue
+        if output_ref in selected_sources:
+            continue
+        cleaned_outputs.append(
+            OutputSpec(
+                kind="vector",
+                source=output_ref,
+                format="geojson",
+                config={},
+            )
+        )
+        selected_sources.add(output_ref)
+        repairs.append(
+            f"preserved derived high-priority vector {output_ref!r} as GeoJSON output"
         )
 
     metadata = dict(normalized.metadata or {})
@@ -2093,5 +2513,22 @@ def normalize_llm_query_spec_for_planning(spec: QuerySpec) -> QuerySpec:
                 source=current.source,
                 metadata={**current.metadata, "normalization": nm},
             )
+
+    current, existing_report_pdf_repairs = _ensure_existing_reports_have_pdf_outputs(
+        current
+    )
+    if existing_report_pdf_repairs:
+        nm = dict(current.metadata.get("normalization") or {})
+        nm["applied"] = True
+        nm["repairs"] = nm.get("repairs", []) + existing_report_pdf_repairs
+        current = QuerySpec(
+            raw_query=current.raw_query,
+            goal=current.goal,
+            entities=current.entities,
+            operations=current.operations,
+            outputs=current.outputs,
+            source=current.source,
+            metadata={**current.metadata, "normalization": nm},
+        )
 
     return current

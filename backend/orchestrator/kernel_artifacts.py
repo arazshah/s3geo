@@ -227,6 +227,16 @@ def _rows_from_table_dict(value: dict[str, Any]) -> list[Any] | None:
 
 
 def _looks_like_report_dict(value: dict[str, Any]) -> bool:
+    if (
+        isinstance(value.get("meta"), dict)
+        and isinstance(value.get("table"), dict)
+        and (
+            isinstance(value.get("spec"), dict)
+            or isinstance(value.get("map_layers"), list)
+        )
+    ):
+        return True
+
     if isinstance(value.get("sections"), list):
         return True
 
@@ -268,6 +278,28 @@ def output_to_artifact(
     - other values -> SCALAR artifact
     """
     base_metadata = dict(metadata or {})
+
+    # Plugin outputs such as ReportOut and PDFOut expose a deliberate public
+    # serialization contract via ``to_dict``.  Normalize that contract before
+    # falling through to the generic scalar branch; otherwise these objects
+    # are reduced to their Python repr and their report/table/file structure is
+    # permanently lost to the API response adapter.
+    if (
+        not isinstance(value, (dict, list, str, bytes, int, float, bool))
+        and hasattr(value, "to_dict")
+        and callable(value.to_dict)
+    ):
+        converted = value.to_dict()
+        if isinstance(converted, dict):
+            base_metadata.setdefault("input_type", type(value).__name__)
+            return output_to_artifact(
+                converted,
+                source_node=source_node,
+                title=title,
+                produced_by=produced_by,
+                primary=primary,
+                metadata=base_metadata,
+            )
 
     if _is_feature_collection(value):
         base_metadata.setdefault("format", "geojson")
@@ -354,6 +386,26 @@ def output_to_artifact(
                 metadata=base_metadata,
             )
 
+        if _looks_like_report_dict(value):
+            base_metadata.setdefault("input_type", "dict")
+            base_metadata.setdefault(
+                "report_keys",
+                sorted(str(key) for key in value.keys())[:30],
+            )
+
+            return make_artifact(
+                kind=ArtifactKind.REPORT,
+                title=title or value.get("title") or value.get("name"),
+                payload={
+                    "format": "json",
+                    "data": value,
+                },
+                source_node=source_node,
+                produced_by=produced_by,
+                primary=primary,
+                metadata=base_metadata,
+            )
+
         rows = _rows_from_table_dict(value)
         if rows is not None:
             columns = value.get("columns") or value.get("fields")
@@ -370,26 +422,6 @@ def output_to_artifact(
                     "format": "json",
                     "rows": rows,
                     "columns": columns or [],
-                },
-                source_node=source_node,
-                produced_by=produced_by,
-                primary=primary,
-                metadata=base_metadata,
-            )
-
-        if _looks_like_report_dict(value):
-            base_metadata.setdefault("input_type", "dict")
-            base_metadata.setdefault(
-                "report_keys",
-                sorted(str(key) for key in value.keys())[:30],
-            )
-
-            return make_artifact(
-                kind=ArtifactKind.REPORT,
-                title=title or value.get("title") or value.get("name"),
-                payload={
-                    "format": "json",
-                    "data": value,
                 },
                 source_node=source_node,
                 produced_by=produced_by,

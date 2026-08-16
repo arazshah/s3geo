@@ -107,6 +107,17 @@ def test_render_pdf_from_dict_report():
     assert "ویلای لوکس" in result.html
 
 
+def test_render_pdf_tolerates_non_numeric_score_placeholder():
+    report = _make_report()
+    report.meta["score_field"] = "investment_score"
+    report.table["rows"][0]["investment_score"] = "—"
+
+    result = render_pdf(report, save_to_disk=False)
+
+    assert not any("HTML render failed" in error for error in result.errors)
+    assert "—" in result.html
+
+
 def test_render_pdf_with_missing_template():
     report = _make_report()
     result = render_pdf(

@@ -501,6 +501,8 @@ def score_features(
         "score_field",
         "rank_field",
         "descending",
+        "sort_by",
+        "order",
         "limit",
         "metadata",
     ],
@@ -523,6 +525,8 @@ def rank_features(
     score_field: str = "score",
     rank_field: str = "rank",
     descending: bool = True,
+    sort_by: str | list[str] | None = None,
+    order: str | list[str] | None = None,
     limit: int | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> VectorOut:
@@ -541,40 +545,78 @@ def rank_features(
 
     input_features = _extract_features(features)
 
-    def sort_key(feature: dict[str, Any]) -> tuple[int, float]:
-        props = feature.get("properties") or {}
-        value = _to_float(_get_property(props, score_field), None)
-        # Missing values go last.
-        if value is None:
-            return (1, 0.0)
-        return (0, value)
-
-    ranked = sorted(
-        input_features,
-        key=sort_key,
-        reverse=bool(descending),
-    )
-
-    # Fix missing values last even when descending=True.
-    ranked = sorted(
-        ranked,
-        key=lambda f: _to_float((f.get("properties") or {}).get(score_field), None) is None,
-    )
-    if descending:
-        with_score = [f for f in ranked if _to_float((f.get("properties") or {}).get(score_field), None) is not None]
-        no_score = [f for f in ranked if _to_float((f.get("properties") or {}).get(score_field), None) is None]
-        with_score = sorted(
-            with_score,
-            key=lambda f: _to_float((f.get("properties") or {}).get(score_field), 0.0) or 0.0,
-            reverse=True,
-        )
-        ranked = with_score + no_score
+    if sort_by is None:
+        sort_fields = [score_field]
+    elif isinstance(sort_by, str) and sort_by.strip():
+        sort_fields = [sort_by.strip()]
+    elif isinstance(sort_by, list) and all(
+        isinstance(field, str) and field.strip() for field in sort_by
+    ):
+        sort_fields = [field.strip() for field in sort_by]
     else:
+        raise ValueError("sort_by must be a non-empty string, list of strings, or None.")
+
+    if order is None:
+        sort_orders = ["desc" if descending else "asc"] * len(sort_fields)
+    elif isinstance(order, str):
+        sort_orders = [order.strip().lower()] * len(sort_fields)
+    elif isinstance(order, list) and len(order) == len(sort_fields):
+        sort_orders = [str(item).strip().lower() for item in order]
+    else:
+        raise ValueError("order must be a string or match the sort_by field count.")
+
+    if any(item not in {"asc", "desc"} for item in sort_orders):
+        raise ValueError("order values must be 'asc' or 'desc'.")
+
+    if sort_by is not None:
+        ranked = list(input_features)
+
+        def comparable(value: Any) -> tuple[int, Any]:
+            numeric = _to_float(value, None)
+            if numeric is not None:
+                return (0, numeric)
+            return (1, str(value).casefold())
+
+        # Python sorting is stable. Apply the least-significant key first to
+        # produce deterministic lexicographic ranking with missing values last.
+        for field, direction in reversed(list(zip(sort_fields, sort_orders))):
+            present = [
+                feature for feature in ranked
+                if _get_property(feature.get("properties") or {}, field) is not None
+            ]
+            missing = [
+                feature for feature in ranked
+                if _get_property(feature.get("properties") or {}, field) is None
+            ]
+            present.sort(
+                key=lambda feature: comparable(
+                    _get_property(feature.get("properties") or {}, field)
+                ),
+                reverse=direction == "desc",
+            )
+            ranked = present + missing
+
+    else:
+        def sort_key(feature: dict[str, Any]) -> tuple[int, float]:
+            props = feature.get("properties") or {}
+            value = _to_float(_get_property(props, score_field), None)
+            # Missing values go last.
+            if value is None:
+                return (1, 0.0)
+            return (0, value)
+
+        ranked = sorted(
+            input_features,
+            key=sort_key,
+            reverse=bool(descending),
+        )
+        # Fix missing values last for both directions.
         with_score = [f for f in ranked if _to_float((f.get("properties") or {}).get(score_field), None) is not None]
         no_score = [f for f in ranked if _to_float((f.get("properties") or {}).get(score_field), None) is None]
         with_score = sorted(
             with_score,
             key=lambda f: _to_float((f.get("properties") or {}).get(score_field), 0.0) or 0.0,
+            reverse=bool(descending),
         )
         ranked = with_score + no_score
 
@@ -597,6 +639,8 @@ def rank_features(
             "score_field": score_field,
             "rank_field": rank_field,
             "descending": bool(descending),
+            "sort_by": sort_fields,
+            "order": sort_orders,
             "limit": limit,
             "created_at": _utc_now_iso(),
             **(metadata or {}),

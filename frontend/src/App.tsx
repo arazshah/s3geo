@@ -568,7 +568,16 @@ function makeJsonSafe<T = unknown>(value: T): T {
 function unwrapApiPayload<T = unknown>(value: T): T {
   if (!isRecord(value)) return value;
 
-  if ("data" in value && isRecord(value.data)) {
+  const hasResponseContract =
+    "status" in value ||
+    "request_id" in value ||
+    "layers" in value ||
+    "map_layers" in value ||
+    "outputs" in value ||
+    "files" in value ||
+    "ranking_table" in value;
+
+  if (!hasResponseContract && "data" in value && isRecord(value.data)) {
     return value.data as T;
   }
 
@@ -584,13 +593,6 @@ function unwrapApiPayload<T = unknown>(value: T): T {
   // while retaining request_id, metadata, outputs and layers at the root.
   // Treating every ``result`` object as an envelope drops the map contract.
   const result = value.result;
-  const hasResponseContract =
-    "status" in value ||
-    "request_id" in value ||
-    "layers" in value ||
-    "map_layers" in value ||
-    "outputs" in value;
-
   if (isRecord(result) && !hasResponseContract) {
     return result as T;
   }
@@ -3238,7 +3240,7 @@ export default function App() {
         onNavigate={handleNavigate}
       />
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Header
           activeView={activeView}
           onToggleLeft={() => setLeftCollapsed((value) => !value)}
@@ -3248,7 +3250,7 @@ export default function App() {
         />
 
         <div className="flex min-h-0 flex-1">
-          <main className="flex min-w-0 flex-1 flex-col">
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col">
             {activeView === "ai-query" && (
 
               <TopQueryPanel

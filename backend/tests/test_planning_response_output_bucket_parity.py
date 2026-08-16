@@ -130,6 +130,43 @@ def test_query_spec_planning_response_exposes_frontend_output_fields() -> None:
     assert response["report"] == report_payload
 
 
+def test_structured_report_table_and_pdf_are_exposed_in_typed_buckets() -> None:
+    class ReportValue:
+        def to_dict(self):
+            return {
+                "title": "Hazard report",
+                "summary": {"count": 1},
+                "table": {
+                    "title": "Hazard ranking",
+                    "columns": [{"field": "rank"}],
+                    "rows": [{"rank": 1, "id": "SUB-01"}],
+                },
+                "sections": [],
+            }
+
+    class PdfValue:
+        def to_dict(self):
+            return {
+                "file_path": "/tmp/hazard_report.pdf",
+                "success": True,
+            }
+
+    _, outputs, primary_report = planning_outputs_to_response_payload(
+        SimpleNamespace(
+            output_nodes={
+                "hazard_report": ReportValue(),
+                "hazard_pdf": PdfValue(),
+            }
+        )
+    )
+
+    assert primary_report["title"] == "Hazard report"
+    assert outputs["reports"][0]["source_node"] == "hazard_report"
+    assert outputs["tables"][0]["rows"] == [{"rank": 1, "id": "SUB-01"}]
+    assert outputs["files"][0]["path"] == "/tmp/hazard_report.pdf"
+    assert outputs["documents"][0]["format"] == "pdf"
+
+
 def test_production_response_builder_exposes_files_reports_and_map_from_outputs() -> None:
     response = ProductionResponseBuilder().build_dict(
         run_result={

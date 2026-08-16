@@ -34,6 +34,7 @@ def test_default_ranked_features_report_spec_builds_domain_neutral_report_spec()
     assert spec.tables[0].source == "ranked_features"
     assert [column.field for column in spec.tables[0].columns] == [
         "rank",
+        "id",
         "name",
         "score",
     ]

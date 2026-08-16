@@ -286,7 +286,7 @@
             {% set rank_cls = 'rank-' + val|string if val in [1,2,3] else 'rank-other' %}
             <span class="rank-badge {{ rank_cls }}">{{ val }}</span>
 
-          {% elif col.field == meta.score_field %}
+          {% elif col.field == meta.score_field and val is number %}
             <div class="score-bar-wrap score-bar-cell">
               {% set pct = (val / 100 * 30)|int %}
               <div class="score-bar" style="width:{{ pct }}mm"></div>

@@ -145,6 +145,7 @@ def default_ranked_features_report_spec(
 
     columns = [
         TableColumnSpec(field=rank_field, label="رتبه", align="center", width=60),
+        TableColumnSpec(field="id", label="شناسه", align="left"),
         TableColumnSpec(field=name_field, label="نام", align="right"),
         TableColumnSpec(
             field=score_field,
