@@ -62,6 +62,8 @@ _RANK_PARAM_MAP = {
     "score_field": "score_field",
     "rank_field": "rank_field",
     "descending": "descending",
+    "sort_by": "sort_by",
+    "order": "order",
     "limit": "limit",
     "metadata": "metadata",
 }
@@ -240,7 +242,6 @@ OP_CATALOG: dict[str, OpDescriptor] = {
         notes=(
             "Use when the user asks for nearest/closest target features for each "
             "source feature, e.g. 'nearest X to each Y', 'closest hospital to every "
-            "school', 'نزدیک‌ترین X به هر Y'. Set k=1 for one closest target per "
             "source. Output preserves source properties and adds: "
             "_nearest_distance, _neighbor_rank, _source_index, _target_index, "
             "_nearest_status, _nearest_engine, _target_properties. "
@@ -402,7 +403,6 @@ OP_CATALOG: dict[str, OpDescriptor] = {
         output_type="vector",
         notes=(
             "Create buffer polygons around input features. Use for requests like "
-            "'within X meters', 'حریم X متری', or proximity zones. Use metric CRS "
             "when distance is in meters."
         ),
     ),
@@ -973,6 +973,54 @@ OP_CATALOG: dict[str, OpDescriptor] = {
         },
         output_type="vector",
         notes="Compatibility alias for calculate_area_perimeter.",
+    ),
+
+    "calculate_perimeter": OpDescriptor(
+        op_name="calculate_perimeter",
+        capability_name="calculate_area_perimeter",
+        input_map={"vector": "features"},
+        input_types={"vector": "vector"},
+        param_map={
+            "engine": "engine",
+            "precision": "precision",
+            "drop_failed": "drop_failed",
+            "source_crs": "source_crs",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes="Compatibility alias for calculate_area_perimeter.",
+    ),
+
+    "calculate_length": OpDescriptor(
+        op_name="calculate_length",
+        capability_name="calculate_area_perimeter",
+        input_map={"vector": "features"},
+        input_types={"vector": "vector"},
+        param_map={
+            "engine": "engine",
+            "precision": "precision",
+            "drop_failed": "drop_failed",
+            "source_crs": "source_crs",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes="Compatibility alias for calculate_area_perimeter.",
+    ),
+
+    "geometry_metrics": OpDescriptor(
+        op_name="geometry_metrics",
+        capability_name="calculate_area_perimeter",
+        input_map={"vector": "features"},
+        input_types={"vector": "vector"},
+        param_map={
+            "engine": "engine",
+            "precision": "precision",
+            "drop_failed": "drop_failed",
+            "source_crs": "source_crs",
+            "metadata": "metadata",
+        },
+        output_type="vector",
+        notes="Semantic alias for area, perimeter, and length metrics.",
     ),
 
     "extract_centroids": OpDescriptor(

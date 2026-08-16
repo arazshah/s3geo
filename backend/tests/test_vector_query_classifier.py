@@ -5,7 +5,7 @@ from smart_spatial_system.application.services.vector_query_classifier import (
 
 
 def test_is_vector_display_query_matches_text_tokens() -> None:
-    assert is_vector_display_query("نقاط را روی نقشه نمایش بده") is True
+    assert is_vector_display_query("show points on the map") is True
     assert is_vector_display_query("show vector layer") is True
     assert is_vector_display_query("draw geojson features") is True
 
@@ -63,8 +63,8 @@ def test_is_vector_display_query_rejects_raster_or_plain_text_queries() -> None:
 
 
 def test_is_vector_summary_query_matches_text_tokens() -> None:
-    assert is_vector_summary_query("تعداد عارضه‌های فایل را بگو") is True
-    assert is_vector_summary_query("چند نقطه داخل geojson است؟") is True
+    assert is_vector_summary_query("report the feature count in the file") is True
+    assert is_vector_summary_query("how many points are in the GeoJSON?") is True
     assert is_vector_summary_query("summarize vector layer") is True
 
 

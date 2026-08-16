@@ -152,7 +152,7 @@ Known capability meanings (use EXACT names):
 - transform_vector_crs: reproject vector to another CRS.
 - export_vector_geojson: export vector as geojson.
 
-For vector display / "نقاط را نمایش بده" / "عوارض را نشان بده":
+For vector-display requests such as "show points" or "show features":
 prefer filter_features (with no filter) or extract_centroids,
 set required_inputs.vector=true, required_inputs.raster=false,
 and output_expectation.map_layer=true.
@@ -162,7 +162,7 @@ Never include capabilities that are not in available_capabilities.
 Output JSON schema:
 {
   "intent_name": "vegetation_extraction | raster_vectorization | raster_statistics | vector_display | vector_summary | vector_filter | buffer_analysis | nearest_neighbor | spatial_overlay | geometry_validation | unknown",
-  "language": "fa | en | mixed | unknown",
+  "language": "en | unknown",
   "summary": "short summary",
   "preferred_capabilities": ["capability_name"],
   "required_inputs": {
@@ -185,9 +185,9 @@ Output JSON schema:
 }
 
 Rules:
-- For Persian vegetation / پوشش گیاهی / NDVI queries, use intent_name vegetation_extraction.
+- For vegetation or NDVI queries, use intent_name vegetation_extraction.
 - For vegetation extraction, prefer calculate_spectral_index, threshold_raster, raster_to_vector when vectorization/polygon is requested.
-- If user asks polygon/پلیگون/vector/وکتور/تبدیل, set parameters.vectorize=true and output map_layer=true.
+- If the user asks for polygons, vectors, or conversion, set parameters.vectorize=true and output map_layer=true.
 - If no threshold is mentioned for NDVI vegetation, use threshold=0.3.
 - Only include capabilities that are in available_capabilities.
 - If no suitable capability exists, return intent_name unknown with warnings.
@@ -347,8 +347,6 @@ def _normalize_intent(
     if (
         "ndvi" in lower_query
         or "vegetation" in lower_query
-        or "پوشش گیاهی" in query
-        or "گیاهی" in query
     ):
         if intent["intent_name"] in {"unknown", ""}:
             intent["intent_name"] = "vegetation_extraction"
@@ -357,8 +355,8 @@ def _normalize_intent(
         parameters.setdefault("threshold", 0.3)
 
         vectorize = any(
-            token in lower_query or token in query
-            for token in ["polygon", "vector", "پلیگون", "وکتور", "تبدیل"]
+            token in lower_query
+            for token in ["polygon", "vector", "convert", "vectorize"]
         )
         parameters.setdefault("vectorize", vectorize)
 

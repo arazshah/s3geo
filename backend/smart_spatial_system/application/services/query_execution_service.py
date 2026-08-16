@@ -316,7 +316,7 @@ class OrchestratorServiceConfig:
 
     min_score: float = 0.01
 
-    response_language: str = "fa"
+    response_language: str = "en"
 
     # Experimental opt-in: execute QuerySpec plans through the
     # geochat_kernel execution bridge in addition to the current DAG path.
@@ -355,8 +355,8 @@ class OrchestratorServiceConfig:
         if self.max_weight < self.min_weight:
             raise ValueError("max_weight must be >= min_weight.")
 
-        if self.response_language not in {"fa", "en"}:
-            raise ValueError("response_language must be one of: fa, en.")
+        if self.response_language != "en":
+            raise ValueError("response_language must be en.")
 
 
 class OrchestratorServiceError(RuntimeError):
@@ -672,7 +672,7 @@ class QueryExecutionService:
         final_metadata["structured_error"] = structured_error
         final_metadata["service_structured_error"] = structured_error
 
-        answer = f"در برنامه‌ریزی درخواست خطا رخ داد: {message}"
+        answer = f"Request planning failed: {message}"
 
         return {
             "status": "failed",
@@ -691,14 +691,14 @@ class QueryExecutionService:
             "reports": [],
             "artifacts": [],
             "warnings": [
-                "برنامه‌ریزی درخواست ناموفق بود.",
-                f"جزئیات خطا: {message}",
+                "Request planning failed.",
+                f"Error details: {message}",
             ],
             "errors": [structured_error],
             "next_actions": [
-                "نقش داده‌های ورودی را مشخص کنید.",
-                "برای nearest/proximity نقش‌های source و target الزامی هستند.",
-                "ورودی‌های انتخاب‌شده و metadata را بررسی کنید.",
+                "Specify the input dataset roles.",
+                "Nearest and proximity operations require source and target roles.",
+                "Review the selected inputs and metadata.",
             ],
             "metadata": final_metadata,
             "confidence": {

@@ -363,7 +363,7 @@ class QuerySpecPromptBuilder:
                 }
             ],
             "metadata": {
-                "language": "fa",
+                "language": "en",
                 "requires_user_confirmation": False,
             },
         }

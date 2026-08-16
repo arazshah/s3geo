@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import re
+import shutil
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -223,6 +224,58 @@ class OutputStorage:
                         )
                     )
 
+        # Persist binary/file artifacts produced by planning plugins (notably
+        # PDFOut).  The renderer may use a temporary path; copying it into the
+        # request output directory makes it durable and reachable through the
+        # existing authenticated output-file download route.
+        persisted_source_paths: set[str] = set()
+        logical_files = list(public_output_contract.get("output_files") or [])
+        logical_files.extend(public_output_contract.get("documents") or [])
+
+        for item in logical_files:
+            if not isinstance(item, dict):
+                continue
+
+            raw_path = item.get("path") or item.get("file_path")
+            if not isinstance(raw_path, str) or not raw_path.strip():
+                continue
+
+            source_path = Path(raw_path)
+            try:
+                resolved_source = source_path.resolve()
+            except OSError:
+                continue
+
+            source_key = str(resolved_source)
+            if source_key in persisted_source_paths or not resolved_source.is_file():
+                continue
+
+            persisted_source_paths.add(source_key)
+            filename = _safe_name(
+                str(item.get("filename") or item.get("name") or resolved_source.name)
+            )
+            if not Path(filename).suffix and resolved_source.suffix:
+                filename = f"{filename}{resolved_source.suffix}"
+
+            destination = directory / filename
+            try:
+                if resolved_source != destination.resolve():
+                    shutil.copy2(resolved_source, destination)
+            except OSError as exc:
+                raise OutputStorageError(
+                    f"Failed to persist generated output file {resolved_source}: {exc}"
+                ) from exc
+
+            files.append(
+                {
+                    "filename": destination.name,
+                    "kind": "pdf" if destination.suffix.lower() == ".pdf" else "output_file",
+                    "path": str(destination),
+                    "size_bytes": destination.stat().st_size,
+                    "media_type": self.get_media_type(destination.name),
+                }
+            )
+
         # Save a JSON-safe lightweight run result if possible.
         # This is useful for debugging and reproducibility.
         files.append(
@@ -258,6 +311,13 @@ class OutputStorage:
         )
 
         manifest["files"].append(manifest_file)
+
+        for file_info in manifest["files"]:
+            if isinstance(file_info, dict) and file_info.get("filename"):
+                file_info["download_url"] = (
+                    f"/api/v1/requests/{request_id}/outputs/files/"
+                    f"{file_info['filename']}"
+                )
 
         # Rewrite final manifest including manifest entry itself.
         self._write_json(

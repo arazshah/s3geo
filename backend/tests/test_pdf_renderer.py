@@ -22,7 +22,7 @@ def _make_report() -> ReportOut:
                 "geometry": {"type": "Point", "coordinates": [51.4, 35.7]},
                 "properties": {
                     "id": "p1",
-                    "name": "ویلای لوکس",
+                    "name": "Luxury Villa",
                     "rank": 1,
                     "investment_score": 87.5,
                     "distance_to_poi": 120.0,
@@ -38,7 +38,7 @@ def _make_report() -> ReportOut:
                 "geometry": {"type": "Point", "coordinates": [51.5, 35.6]},
                 "properties": {
                     "id": "p2",
-                    "name": "آپارتمان مرکز",
+                    "name": "Central Apartment",
                     "rank": 2,
                     "investment_score": 71.2,
                     "distance_to_poi": 340.0,
@@ -68,8 +68,10 @@ def test_render_pdf_produces_html():
     result = render_pdf(report, save_to_disk=False)
 
     assert len(result.html) > 100
-    assert "ویلای لوکس" in result.html
-    assert "گزارش رتبه‌بندی" in result.html
+    assert "Luxury Villa" in result.html
+    assert "Property Ranking" in result.html
+    assert not any("\u0600" <= character <= "\u06ff" for character in result.html)
+    assert '<html dir="ltr" lang="en">' in result.html
 
 
 def test_render_pdf_html_contains_table_data():
@@ -78,7 +80,7 @@ def test_render_pdf_html_contains_table_data():
 
     assert "87.5" in result.html or "87" in result.html
     assert "71.2" in result.html or "71" in result.html
-    assert "آپارتمان مرکز" in result.html
+    assert "Central Apartment" in result.html
 
 
 def test_render_pdf_saves_to_disk(tmp_path):
@@ -104,7 +106,18 @@ def test_render_pdf_from_dict_report():
     result = render_pdf(report_dict, save_to_disk=False)
 
     assert isinstance(result, PDFOut)
-    assert "ویلای لوکس" in result.html
+    assert "Luxury Villa" in result.html
+
+
+def test_render_pdf_tolerates_non_numeric_score_placeholder():
+    report = _make_report()
+    report.meta["score_field"] = "investment_score"
+    report.table["rows"][0]["investment_score"] = "—"
+
+    result = render_pdf(report, save_to_disk=False)
+
+    assert not any("HTML render failed" in error for error in result.errors)
+    assert "—" in result.html
 
 
 def test_render_pdf_with_missing_template():

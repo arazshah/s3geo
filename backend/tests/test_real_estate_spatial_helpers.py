@@ -174,9 +174,9 @@ def test_metric_and_bool_helpers() -> None:
 
 def test_normalize_risk_level() -> None:
     assert normalize_risk_level("low") == "low"
-    assert normalize_risk_level("پایین") == "low"
+    assert normalize_risk_level("safe") == "low"
     assert normalize_risk_level("medium") == "medium"
-    assert normalize_risk_level("متوسط") == "medium"
+    assert normalize_risk_level("acceptable") == "medium"
     assert normalize_risk_level("high") == "high"
-    assert normalize_risk_level("بالا") == "high"
+    assert normalize_risk_level("unsafe") == "high"
     assert normalize_risk_level("unknown-value") == "medium"

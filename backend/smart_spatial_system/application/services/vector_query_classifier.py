@@ -22,11 +22,6 @@ def is_vector_display_query(
     q = str(query or "").strip().lower()
 
     display_tokens = [
-        "نمایش",
-        "نشان بده",
-        "نشان بدهد",
-        "روی نقشه",
-        "نقشه",
         "display",
         "show",
         "render",
@@ -34,12 +29,6 @@ def is_vector_display_query(
     ]
 
     vector_tokens = [
-        "نقطه",
-        "نقاط",
-        "عارضه",
-        "عوارض",
-        "وکتور",
-        "برداری",
         "geojson",
         "feature",
         "features",
@@ -47,7 +36,6 @@ def is_vector_display_query(
         "points",
         "vector",
         "layer",
-        "لایه",
     ]
 
     has_display = any(token in q for token in display_tokens)
@@ -107,9 +95,9 @@ def is_vector_summary_query(
     Detect vector inspection / feature-count / summary queries.
 
     Examples:
-    - لایه وکتور را بررسی کن و تعداد عارضه‌ها را گزارش بده
-    - چند نقطه داخل فایل است؟
-    - تعداد عارضه‌های فایل را بگو
+    - inspect the vector layer and report the feature count
+    - how many points are in the file?
+    - report the file's feature count
     - summarize vector layer
     """
     q = str(query or "").strip().lower()
@@ -147,29 +135,13 @@ def is_vector_summary_query(
         "phase 5",
         "phase 6",
         "phase 7",
-        "تحلیل",
-        "رتبه",
-        "تقاطع",
-        "بافر",
-        "اولویت",
-        "خطر",
-        "فرونشست",
-        "گزارش pdf",
     ]
     if any(token in q for token in complex_analysis_tokens):
         return False
 
     summary_tokens = [
-        "تعداد",
-        "چند",
-        "گزارش",
-        "گزارش بده",
-        "بررسی",
-        "خلاصه",
-        "آمار",
-        "شمارش",
-        "بشمار",
         "count",
+        "how many",
         "summary",
         "summarize",
         "inspect",
@@ -179,12 +151,6 @@ def is_vector_summary_query(
     ]
 
     vector_tokens = [
-        "نقطه",
-        "نقاط",
-        "عارضه",
-        "عوارض",
-        "وکتور",
-        "برداری",
         "geojson",
         "feature",
         "features",
@@ -192,8 +158,6 @@ def is_vector_summary_query(
         "points",
         "vector",
         "layer",
-        "لایه",
-        "فایل",
     ]
 
     has_summary = any(token in q for token in summary_tokens)

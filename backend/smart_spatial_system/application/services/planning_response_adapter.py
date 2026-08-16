@@ -174,19 +174,39 @@ def _mirror_artifact_to_output_buckets(
         return
 
     if kind == "report":
-        if _bucket_has_source(outputs.get("reports"), source_node):
-            return
+        report_data = _artifact_payload_data(artifact)
 
-        outputs.setdefault("reports", []).append(
-            {
-                "name": title,
-                "source": "planning.output_nodes",
-                "source_node": source_node,
-                "artifact_id": artifact_id,
-                "data": _artifact_payload_data(artifact),
-                "artifact": artifact,
-            }
-        )
+        if not _bucket_has_source(outputs.get("reports"), source_node):
+            outputs.setdefault("reports", []).append(
+                {
+                    "name": title,
+                    "source": "planning.output_nodes",
+                    "source_node": source_node,
+                    "artifact_id": artifact_id,
+                    "data": report_data,
+                    "artifact": artifact,
+                }
+            )
+
+        # ReportOut carries the user-facing ranking table inside its structured
+        # report payload.  Mirror it into the legacy tables bucket so the
+        # frontend does not need to understand a plugin-specific report shape.
+        if isinstance(report_data, dict):
+            table = report_data.get("table")
+            if isinstance(table, dict) and not _bucket_has_source(
+                outputs.get("tables"), source_node
+            ):
+                outputs.setdefault("tables", []).append(
+                    {
+                        "name": table.get("title") or title,
+                        "source": "planning.output_nodes",
+                        "source_node": source_node,
+                        "artifact_id": artifact_id,
+                        "rows": table.get("rows", []),
+                        "columns": table.get("columns", []),
+                        "data": table,
+                    }
+                )
         return
 
     if kind == "download":
@@ -205,6 +225,19 @@ def _mirror_artifact_to_output_buckets(
                 "artifact": artifact,
             }
         )
+
+        if str(payload.get("format") or "").lower() == "pdf":
+            outputs.setdefault("documents", []).append(
+                {
+                    "name": title,
+                    "path": file_path,
+                    "source": "planning.output_nodes",
+                    "source_node": source_node,
+                    "format": "pdf",
+                    "artifact_id": artifact_id,
+                    "artifact": artifact,
+                }
+            )
         return
 
     if kind == "raster_ref":

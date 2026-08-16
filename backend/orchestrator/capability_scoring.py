@@ -37,21 +37,9 @@ DEFAULT_DOMAIN_HINTS: dict[str, list[str]] = {
         "ndbi",
         "savi",
         "evi",
-        "شاخص",
-        "شاخص طیفی",
-        "پوشش گیاهی",
-        "آب",
-        "ماهواره",
-        "ماهواره‌ای",
     ],
     "threshold_raster": [
         "threshold",
-        "آستانه",
-        "ماسک",
-        "بیشتر از",
-        "بالاتر از",
-        "کمتر از",
-        "پایین‌تر از",
         "greater than",
         "less than",
         ">",
@@ -64,28 +52,11 @@ DEFAULT_DOMAIN_HINTS: dict[str, list[str]] = {
         "polygons",
         "vector",
         "vectorize",
-        "پلیگون",
-        "وکتور",
-        "بردار",
-        "تبدیل کن",
-        "تبدیل",
-        "استخراج کن",
     ],
 }
 
 
 CONVERSION_TO_VECTOR_CUES = [
-    "به پلیگون",
-    "پلیگون تبدیل",
-    "به وکتور",
-    "وکتور تبدیل",
-    "به بردار",
-    "بردار تبدیل",
-    "رستر را به پلیگون",
-    "ماسک رستر را به پلیگون",
-    "ماسک را به پلیگون",
-    "تبدیل به پلیگون",
-    "تبدیل به وکتور",
     "to polygon",
     "to vector",
     "convert to polygon",
@@ -96,12 +67,6 @@ CONVERSION_TO_VECTOR_CUES = [
 
 THRESHOLD_CUES = [
     "threshold",
-    "آستانه",
-    "بیشتر از",
-    "بالاتر از",
-    "کمتر از",
-    "پایین تر از",
-    "پایین‌تر از",
     "greater than",
     "less than",
     ">=",
@@ -331,8 +296,7 @@ class KeywordScoringCapabilityRouter:
 
         # 6. Intent-level routing corrections.
         #
-        # Some words such as "mask/ماسک" may appear in conversion queries:
-        #     "ماسک رستر را به پلیگون تبدیل کن"
+        # Terms such as "mask" may appear in raster conversion queries.
         #
         # In that case, the user's dominant intent is raster_to_vector, not
         # threshold_raster. So we add a strong conversion boost and reduce
@@ -392,10 +356,6 @@ def _normalize_text(value: str) -> str:
     text = value.strip().lower()
 
     replacements = {
-        "ي": "ی",
-        "ك": "ک",
-        "ۀ": "ه",
-        "ة": "ه",
         "‌": " ",
     }
 

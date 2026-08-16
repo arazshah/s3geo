@@ -507,6 +507,7 @@ export function MapView({
   const mapRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.FeatureGroup | null>(null);
   const lastAutoFitSignatureRef = useRef("");
+  const lastMapHeightRef = useRef(0);
   const [coordinates, setCoordinates] = useState("35.6992° N, 51.3886° E");
   const [fetchedGeoJsonByLayer, setFetchedGeoJsonByLayer] = useState<
     Record<string, unknown>
@@ -593,6 +594,42 @@ export function MapView({
       map.remove();
       mapRef.current = null;
       layerGroupRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    const element = mapElementRef.current;
+    const map = mapRef.current;
+
+    if (!element || !map || typeof ResizeObserver === "undefined") return;
+
+    let frame = 0;
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
+
+      const becameVisible = lastMapHeightRef.current <= 0;
+      lastMapHeightRef.current = rect.height;
+
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        map.invalidateSize(false);
+
+        const group = layerGroupRef.current;
+        if (becameVisible && group && group.getLayers().length > 0) {
+          const bounds = group.getBounds();
+          if (bounds.isValid()) {
+            map.fitBounds(bounds.pad(0.18), { animate: false, maxZoom: 15 });
+          }
+        }
+      });
+    });
+
+    observer.observe(element);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
     };
   }, []);
 

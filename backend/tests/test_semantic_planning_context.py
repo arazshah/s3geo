@@ -57,14 +57,14 @@ def _schema():
 
 
 def test_extract_requested_limit_supports_persian_digits():
-    assert extract_requested_limit("۲۰ مورد اول را نمایش بده") == 20
+    assert extract_requested_limit("show the top 20") == 20
     assert extract_requested_limit("top 10 nearest hospitals") == 10
-    assert extract_requested_limit("فقط تحلیل کن") is None
+    assert extract_requested_limit("analyze only") is None
 
 
 def test_infer_query_intents_for_persian_nearest_map_table():
     intents = infer_query_intents(
-        "نزدیک‌ترین مرکز خرید به هر ایستگاه مترو را پیدا کن، فاصله را به متر محاسبه کن و ۲۰ مورد اول را روی نقشه و جدول نمایش بده"
+        "find the nearest shopping center to each metro station, calculate distance in meters, and show the top 20 on a map and table"
     )
 
     assert intents["nearest"] is True
@@ -76,7 +76,7 @@ def test_infer_query_intents_for_persian_nearest_map_table():
 
 def test_build_semantic_planning_context_for_metro_to_shopping_center():
     context = build_semantic_planning_context(
-        "در تهران نزدیک‌ترین مرکز خرید به هر ایستگاه مترو را پیدا کن، فاصله را به متر محاسبه کن و ۲۰ مورد اول را روی نقشه و جدول نمایش بده.",
+        "in Tehran, find the nearest shopping center to each metro station, calculate distance in meters, and show the top 20 on a map and table.",
         _schema(),
     )
 
@@ -115,7 +115,7 @@ def test_build_semantic_planning_context_for_metro_to_shopping_center():
 
 def test_context_to_dict_is_json_friendly_and_contains_guardrails():
     context = build_semantic_planning_context(
-        "نزدیک‌ترین مرکز خرید به هر ایستگاه مترو و ۲۰ مورد اول روی نقشه",
+        "nearest shopping center to each metro station and top 20 on the map",
         _schema(),
     )
 
@@ -138,7 +138,7 @@ def test_context_to_dict_is_json_friendly_and_contains_guardrails():
 
 def test_context_without_detected_concepts_is_safe_empty_context():
     context = build_semantic_planning_context(
-        "یک تحلیل خیلی کلی انجام بده",
+        "run a very general analysis",
         _schema(),
     )
 

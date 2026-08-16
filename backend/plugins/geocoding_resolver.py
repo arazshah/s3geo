@@ -1024,13 +1024,6 @@ def _build_vector_metadata(features: list[dict[str, Any]]) -> dict[str, Any]:
         "address to coordinate",
         "find location",
         "location resolver",
-        "تبدیل آدرس به مختصات",
-        "ژئوکدینگ",
-        "کدگذاری مکانی",
-        "پیدا کردن مکان",
-        "مختصات مکان",
-        "آدرس به نقطه",
-        "نام مکان به مختصات",
     ],
     description="Resolve a place name or address query to geographic point features.",
     required_inputs=["query"],
@@ -1072,7 +1065,7 @@ def geocode_place(
 
     Args:
         query:
-            User text query, e.g. "Tehran", "میدان آزادی".
+            User text query, e.g. "Tehran" or "Azadi Square".
         provider:
             Single provider name.
         provider_chain:
@@ -1185,10 +1178,6 @@ def geocode_place(
         "point to address",
         "resolve coordinate",
         "reverse location",
-        "تبدیل مختصات به آدرس",
-        "ژئوکدینگ معکوس",
-        "مختصات به مکان",
-        "نقطه به آدرس",
     ],
     description="Resolve longitude/latitude coordinates to a human-readable place/address.",
     required_inputs=["lon", "lat"],

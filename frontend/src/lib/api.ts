@@ -522,6 +522,73 @@ function normalizeFilesPayload(payload: unknown): GeoQueryResponse["files"] | un
 }
 
 function normalizeRankingPayload(payload: unknown): GeoQueryResponse["ranking_table"] | undefined {
+  const queue: Array<{ value: unknown; depth: number }> = [{ value: payload, depth: 0 }];
+  const visited = new WeakSet<object>();
+  let bestRankedRows: Record<string, unknown>[] = [];
+  let bestRankingQuality = -1;
+
+  while (queue.length) {
+    const { value, depth } = queue.shift()!;
+    if (!isRecord(value) || depth > 8 || visited.has(value)) continue;
+    visited.add(value);
+
+    const rowCandidates: unknown[][] = [];
+    if (Array.isArray(value.rows)) rowCandidates.push(value.rows);
+    if (isRecord(value.data) && Array.isArray(value.data.rows)) {
+      rowCandidates.push(value.data.rows);
+    }
+    if (
+      isRecord(value.data)
+      && isRecord(value.data.table)
+      && Array.isArray(value.data.table.rows)
+    ) {
+      rowCandidates.push(value.data.table.rows);
+    }
+
+    for (const candidate of rowCandidates) {
+      const rankedRows = candidate.filter(
+        (item) => isRecord(item) && item.rank !== undefined && item.rank !== ""
+      );
+      const tableIdentity = String(
+        value.source_node ?? value.name ?? value.title ?? ""
+      ).toLowerCase();
+      const hasMeaningfulScore = rankedRows.some((item) => {
+        if (!isRecord(item)) return false;
+        return [
+          "annual_rate_mm",
+          "probability_score",
+          "confidence_score",
+          "priority_score",
+          "suitability_score",
+          "score",
+          "investment_score"
+        ].some((key) => item[key] !== undefined && item[key] !== null && item[key] !== "");
+      });
+      const quality =
+        (tableIdentity.includes("rank") ? 100 : 0)
+        + (hasMeaningfulScore ? 50 : 0)
+        + Math.min(rankedRows.length, 20);
+
+      if (rankedRows.length && quality > bestRankingQuality) {
+        bestRankingQuality = quality;
+        bestRankedRows = rankedRows.map(
+          (item) => ({ ...(item as Record<string, unknown>) })
+        );
+      }
+    }
+
+    for (const child of Object.values(value)) {
+      if (isRecord(child)) queue.push({ value: child, depth: depth + 1 });
+      if (Array.isArray(child)) {
+        for (const item of child) {
+          if (isRecord(item)) queue.push({ value: item, depth: depth + 1 });
+        }
+      }
+    }
+  }
+
+  if (bestRankedRows.length) return bestRankedRows;
+
   const array = findArrayByKeys(payload, [
     "ranking_table",
     "rankingTable",
@@ -537,8 +604,8 @@ function normalizeRankingPayload(payload: unknown): GeoQueryResponse["ranking_ta
   }
 
   return array
-    .filter((item) => isRecord(item))
-    .map((item) => item as Record<string, unknown>);
+    .filter((item) => isRecord(item) && item.rank !== undefined && item.rank !== "")
+    .map((item) => ({ ...(item as Record<string, unknown>) }));
 }
 
 async function enrichQueryResponse(
@@ -589,7 +656,10 @@ async function enrichQueryResponse(
     }
   }
 
-  if (!enriched.ranking_table && outputsResult.status === "fulfilled") {
+  if (
+    (!Array.isArray(enriched.ranking_table) || enriched.ranking_table.length === 0)
+    && outputsResult.status === "fulfilled"
+  ) {
     const ranking = normalizeRankingPayload(outputsResult.value);
 
     if (ranking?.length) {

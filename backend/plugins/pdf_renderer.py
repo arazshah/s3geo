@@ -39,13 +39,13 @@ PLUGIN_ID = "pdf_renderer"
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates" / "reports"
 DEFAULT_TEMPLATE = "default_report.html"
 
-RISK_LABELS_FA = {
-    "very_low": "خیلی کم",
-    "low": "کم",
-    "medium": "متوسط",
-    "high": "زیاد",
-    "very_high": "خیلی زیاد",
-    "critical": "بحرانی",
+RISK_LABELS_EN = {
+    "very_low": "Very Low",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "very_high": "Very High",
+    "critical": "Critical",
 }
 
 LAYER_COLORS = [
@@ -60,14 +60,14 @@ LAYER_COLORS = [
 
 DEFAULT_REPORT_TEMPLATE_HTML = """
 <!doctype html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
-  <title>{{ meta.title or spec.title or "گزارش مکانی" }}</title>
+  <title>{{ meta.title or spec.title or "Spatial Report" }}</title>
   <style>
     body {
       font-family: sans-serif;
-      direction: rtl;
+      direction: ltr;
       margin: 32px;
       color: #111827;
       line-height: 1.7;
@@ -95,7 +95,7 @@ DEFAULT_REPORT_TEMPLATE_HTML = """
     th, td {
       border: 1px solid #d1d5db;
       padding: 6px 8px;
-      text-align: right;
+      text-align: left;
       vertical-align: top;
     }
     th {
@@ -118,23 +118,23 @@ DEFAULT_REPORT_TEMPLATE_HTML = """
   </style>
 </head>
 <body>
-  <h1>{{ meta.title or spec.title or "گزارش مکانی" }}</h1>
+  <h1>{{ meta.title or spec.title or "Spatial Report" }}</h1>
 
   <div class="meta">
-    {% if generated_at_fa %}
-      <div>زمان تولید: {{ generated_at_fa }}</div>
+    {% if generated_at %}
+      <div>Generated at: {{ generated_at }}</div>
     {% endif %}
     {% if meta.request_id %}
-      <div>شناسه درخواست: {{ meta.request_id }}</div>
+      <div>Request ID: {{ meta.request_id }}</div>
     {% endif %}
     {% if meta.report_id %}
-      <div>شناسه گزارش: {{ meta.report_id }}</div>
+      <div>Report ID: {{ meta.report_id }}</div>
     {% endif %}
   </div>
 
   {% if summary %}
   <div class="section">
-    <h2>خلاصه</h2>
+    <h2>Summary</h2>
     <div class="summary-grid">
       {% for key, value in summary.items() %}
         <div class="summary-item">
@@ -148,7 +148,7 @@ DEFAULT_REPORT_TEMPLATE_HTML = """
 
   {% if table %}
   <div class="section">
-    <h2>{{ table.title or "جدول نتایج" }}</h2>
+    <h2>{{ table.title or "Results Table" }}</h2>
     {% set columns = table.columns or [] %}
     {% set rows = table.rows or [] %}
 
@@ -185,14 +185,14 @@ DEFAULT_REPORT_TEMPLATE_HTML = """
       </tbody>
     </table>
     {% else %}
-      <p class="small">ردیفی برای نمایش وجود ندارد.</p>
+      <p class="small">No rows are available.</p>
     {% endif %}
   </div>
   {% endif %}
 
   {% if map_layers %}
   <div class="section">
-    <h2>لایه‌های نقشه</h2>
+    <h2>Map Layers</h2>
     <ul>
       {% for layer in map_layers %}
         <li>{{ layer.name or layer.id or layer.type or "layer" }}</li>
@@ -244,7 +244,7 @@ class PDFOut:
 # Helpers
 # ------------------------------------------------------------------ #
 
-def _format_datetime_fa(iso_str: str | None) -> str:
+def _format_datetime(iso_str: str | None) -> str:
     if not iso_str:
         return ""
     try:
@@ -281,10 +281,10 @@ def _report_template_context(report: ReportOut) -> dict[str, Any]:
         "table": report.table,
         "map_layers": report.map_layers,
         "spec": report.spec,
-        "generated_at_fa": _format_datetime_fa(
+        "generated_at": _format_datetime(
             report.meta.get("generated_at")
         ),
-        "risk_labels": RISK_LABELS_FA,
+        "risk_labels": RISK_LABELS_EN,
         "layer_colors": LAYER_COLORS,
     }
 
@@ -348,10 +348,6 @@ def _render_pdf_bytes(html: str) -> bytes:
         "export pdf",
         "pdf report",
         "pdf output",
-        "گزارش PDF",
-        "خروجی PDF",
-        "تولید PDF",
-        "صدور گزارش",
     ],
     description=(
         "Render a structured ReportOut to a PDF file using "

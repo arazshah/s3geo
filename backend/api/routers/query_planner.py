@@ -31,7 +31,7 @@ class QueryRequest(BaseModel):
     query: str | None = Field(
         default=None,
         description="Natural-language geospatial query.",
-        examples=["یک تحلیل ساده تستی انجام بده"],
+        examples=["Run a simple test analysis"],
     )
     inputs: dict[str, Any] = Field(
         default_factory=dict,

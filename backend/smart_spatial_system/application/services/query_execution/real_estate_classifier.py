@@ -20,32 +20,12 @@ def is_real_estate_analysis_query(
         intent_name = str(getattr(llm_intent, "intent_name", "") or "").lower()
 
     real_estate_tokens = [
-        "ملک",
-        "املاک",
-        "آپارتمان",
-        "ویلا",
-        "زمین",
-        "ساخت و ساز",
-        "ساخت‌وساز",
         "real estate",
         "property",
         "properties",
     ]
 
     analysis_tokens = [
-        "مترو",
-        "مرکز خرید",
-        "خیابان اصلی",
-        "ریسک",
-        "سیل",
-        "زلزله",
-        "آتش",
-        "امتیاز",
-        "رتبه",
-        "رتبه‌بندی",
-        "گزارش",
-        "نزدیک",
-        "۵۰۰",
         "500",
     ]
 
@@ -112,36 +92,17 @@ def looks_like_real_estate_ranking_query(query: str) -> bool:
     q = (query or "").lower()
 
     property_terms = [
-        "ملک",
-        "املاک",
-        "زمین",
-        "آپارتمان",
-        "ویلا",
         "property",
         "real estate",
     ]
     ranking_terms = [
-        "رتبه",
-        "رتبه‌بندی",
-        "رتبه بندی",
-        "امتیاز",
         "score",
         "rank",
         "ranking",
-        "گزارش",
         "report",
     ]
     constraint_terms = [
-        "مترو",
-        "مرکز خرید",
-        "خیابان اصلی",
-        "ریسک",
-        "سیل",
-        "زلزله",
-        "آتش",
-        "۵۰۰",
         "500",
-        "متر",
     ]
 
     return (

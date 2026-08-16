@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from types import SimpleNamespace
 
 from api.query_request_normalization import normalize_query_inputs
 from orchestrator.upload_storage import UploadStorage, UploadStorageConfig
 from smart_spatial_system.application.services.query_execution.planning_execution import (
     _add_filename_based_runtime_input_aliases,
+    _add_single_vector_query_ref_aliases,
 )
 
 
@@ -48,3 +50,56 @@ def test_single_vector_runtime_has_uploaded_geojson_compatibility_alias() -> Non
 
     assert runtime_inputs["uploaded_geojson"] is runtime_inputs["vector"]
     assert final_metadata["runtime_input_aliases_added"]["uploaded_geojson"] == "vector"
+
+
+def test_selected_vector_title_and_stem_are_runtime_aliases() -> None:
+    vector = {"type": "FeatureCollection", "features": []}
+    runtime_inputs = {"vector": vector}
+    final_metadata: dict = {}
+
+    _add_filename_based_runtime_input_aliases(
+        runtime_inputs,
+        user_context=None,
+        metadata={
+            "frontend_selected_data_source_titles": [
+                "isfahan_subsidence_scenario.geojson"
+            ]
+        },
+        final_metadata=final_metadata,
+    )
+
+    assert runtime_inputs["isfahan_subsidence_scenario.geojson"] is vector
+    assert runtime_inputs["isfahan_subsidence_scenario"] is vector
+    assert final_metadata["runtime_input_aliases_added"][
+        "isfahan_subsidence_scenario"
+    ] == "vector"
+
+
+def test_unresolved_explicit_vector_ref_binds_to_sole_runtime_vector() -> None:
+    vector = {"type": "FeatureCollection", "features": []}
+    runtime_inputs = {"vector": vector}
+    final_metadata: dict = {}
+    query_spec = SimpleNamespace(
+        operations=[
+            SimpleNamespace(
+                inputs={"vector": "isfahan_subsidence_scenario"},
+                output="inspection_results",
+            ),
+            SimpleNamespace(
+                inputs={"vector": "inspection_results"},
+                output="report",
+            ),
+        ]
+    )
+
+    _add_single_vector_query_ref_aliases(
+        runtime_inputs,
+        query_spec=query_spec,
+        final_metadata=final_metadata,
+    )
+
+    assert runtime_inputs["isfahan_subsidence_scenario"] is vector
+    assert "inspection_results" not in runtime_inputs
+    assert final_metadata["runtime_input_aliases_added"] == {
+        "isfahan_subsidence_scenario": "vector"
+    }

@@ -66,7 +66,7 @@ def test_production_response_builder_creates_success_response() -> None:
     assert payload["query_hash"] == "hash-prod-001"
 
     assert "3" in payload["answer"]
-    assert "پوشش گیاهی" in payload["answer"] or "vegetation" in payload["answer"]
+    assert "vegetation" in payload["answer"]
 
     assert payload["confidence"]["level"] == "high"
     assert payload["confidence"]["score"] == 0.95
@@ -99,7 +99,7 @@ def test_production_response_builder_warns_for_low_confidence() -> None:
 
     assert payload["confidence"]["level"] == "low"
     assert payload["warnings"]
-    assert any("اطمینان" in warning for warning in payload["warnings"])
+    assert any("confidence" in warning.lower() for warning in payload["warnings"])
     assert payload["next_actions"]
 
 
@@ -112,7 +112,7 @@ def test_production_response_builder_warns_for_ambiguous_routing() -> None:
     )
 
     assert payload["confidence"]["is_ambiguous"] is True
-    assert any("مسیر" in warning or "نزدیک" in warning for warning in payload["warnings"])
+    assert any("route" in warning.lower() for warning in payload["warnings"])
 
 
 def test_production_response_builder_creates_failed_response_from_error() -> None:

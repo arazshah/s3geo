@@ -40,7 +40,7 @@ class ExecutionEngine:
             try:
                 logger.info(f"Executing step: {step.name} (type={step.type})")
 
-                # ۱. پیدا کردن handler مناسب
+                # 1. Find the matching handler.
                 handler = self._find_handler(step.type)
                 if not handler:
                     error_msg = f"No handler found for step type '{step.type}'"
@@ -50,18 +50,18 @@ class ExecutionEngine:
                     trace.entries.append(trace_entry)
                     continue
 
-                # ۲. جمع‌آوری input artifacts
+                # 2. Collect input artifacts.
                 step_inputs = {
                     ref: artifacts.get(ref)
                     for ref in step.dependencies
                     if ref in artifacts
                 }
 
-                # ۳. اجرای step با timeout
+                # 3. Execute the step with a timeout.
                 try:
                     artifact = await asyncio.wait_for(
                         handler.handle(step, step_inputs, context),
-                        timeout=30.0  # ۳۰ ثانیه timeout
+                        timeout=30.0  # 30-second timeout
                     )
                     artifacts[step.name] = artifact
                     trace_entry.status = "success"
@@ -75,7 +75,7 @@ class ExecutionEngine:
                     trace_entry.status = "timeout"
 
                 except Exception as e:
-                    # ۴. CapturException تفصیلی
+                    # 4. Capture detailed exceptions.
                     error_msg = f"Plan step failed: {step.name}"
                     error_detail = f"{type(e).__name__}: {str(e)}"
                     logger.error(f"{error_msg} - {error_detail}", exc_info=True)
@@ -84,7 +84,7 @@ class ExecutionEngine:
                     trace_entry.status = "failed"
 
             except Exception as e:
-                # Exception خارج از try داخلی
+                # Handle exceptions outside the inner try block.
                 error_msg = f"Unexpected error in step {step.name}"
                 error_detail = f"{type(e).__name__}: {str(e)}"
                 logger.error(f"{error_msg} - {error_detail}", exc_info=True)
@@ -98,15 +98,15 @@ class ExecutionEngine:
 
     def _find_handler(self, step_type: str) -> BaseStepHandler | None:
         """
-        پیدا کردن بهترین handler برای step_type.
-        اگر exact match نبود، best-match را برمی‌گرداند.
+        Find the best handler for ``step_type``.
+        Return the closest compatible handler when no exact match exists.
         """
         # exact match
         for hid, handler in self._handlers.items():
             if step_type in handler.handled_types:
                 return handler
 
-        # pattern match (آخری وسیله)
+        # Pattern matching is the final fallback.
         for hid, handler in self._handlers.items():
             for handled in handler.handled_types:
                 if handled.startswith(step_type.rsplit(".", 1)[0] + "."):

@@ -31,7 +31,7 @@ class SimpleNaturalLanguageParser:
 
         normalized = query.strip().lower()
 
-        if "ndvi" not in normalized and "پوشش گیاهی" not in normalized:
+        if "ndvi" not in normalized and "vegetation" not in normalized:
             if self.strict:
                 raise ValueError("Only NDVI vegetation extraction query is supported in this parser version.")
             # Non-strict mode is used by the API/workbench MVP.
@@ -46,12 +46,8 @@ class SimpleNaturalLanguageParser:
         vectorize = any(
             token in normalized
             for token in [
-                "پلیگون",
                 "polygon",
                 "vector",
-                "وکتور",
-                "تبدیل کن",
-                "استخراج کن",
             ]
         )
 
@@ -68,17 +64,13 @@ class SimpleNaturalLanguageParser:
     @staticmethod
     def _extract_threshold(query: str) -> float:
         """
-        Extract threshold from Persian/English query.
+        Extract a threshold from an English query.
 
         Supported examples:
-            بیشتر از 0.3
-            بالاتر از 0.3
             greater than 0.3
             > 0.3
         """
         patterns = [
-            r"بیشتر\s+از\s+([0-9]+(?:\.[0-9]+)?)",
-            r"بالاتر\s+از\s+([0-9]+(?:\.[0-9]+)?)",
             r"greater\s+than\s+([0-9]+(?:\.[0-9]+)?)",
             r">\s*([0-9]+(?:\.[0-9]+)?)",
         ]

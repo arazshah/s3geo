@@ -392,7 +392,7 @@ def _parse_threshold(
     default: float,
 ) -> float:
     patterns = [
-        r"بیشتر از\s*([0-9]+(?:\.[0-9]+)?)",
+        r"greater than\s*([0-9]+(?:\.[0-9]+)?)",
         r"greater than\s*([0-9]+(?:\.[0-9]+)?)",
         r">\s*([0-9]+(?:\.[0-9]+)?)",
     ]

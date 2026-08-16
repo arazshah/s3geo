@@ -26,9 +26,9 @@ def test_default_real_estate_report_spec_structure():
         },
     )
 
-    assert spec.title == "گزارش رتبه‌بندی و تحلیل سرمایه‌گذاری ملک"
+    assert spec.title == "Property Ranking and Investment Analysis Report"
     assert spec.format == "pdf"
-    assert spec.language == "fa"
+    assert spec.language == "en"
 
     # Map layers
     assert len(spec.map_layers) == 4
@@ -145,10 +145,10 @@ def test_table_spec_with_no_columns():
 def test_report_spec_custom_title_and_format():
     spec = default_real_estate_report_spec(
         ranked_source="ranked",
-        title="گزارش سفارشی",
+        title="Custom Report",
         format="html",
         language="fa",
     )
 
-    assert spec.title == "گزارش سفارشی"
+    assert spec.title == "Custom Report"
     assert spec.format == "html"

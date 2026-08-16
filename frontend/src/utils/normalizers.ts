@@ -13,7 +13,10 @@ function findArrayByKeys(
 ): unknown[] | null {
   if (depth > 6) return null;
 
-  if (Array.isArray(payload)) return payload;
+  // Only a top-level array is itself the requested collection. During
+  // recursive traversal an unrelated array (commonly outputs.files) must not
+  // win before a later object containing the requested `rows`/`layers` key.
+  if (Array.isArray(payload)) return depth === 0 ? payload : null;
 
   if (!isRecord(payload)) return null;
 
@@ -116,9 +119,80 @@ export function normalizeFiles(response: GeoQueryResponse): OutputFile[] | null 
 }
 
 export function normalizeRankingRows(response: GeoQueryResponse): RankingRow[] | null {
-  const array = Array.isArray(response.ranking_table)
+  const explicitRows = Array.isArray(response.ranking_table) && response.ranking_table.length
     ? response.ranking_table
-    : findArrayByKeys(response.ranking_table ?? response, [
+    : null;
+  const responseRecord = isRecord(response) ? response : {};
+  const outputsEnvelope = isRecord(responseRecord.outputs) ? responseRecord.outputs : {};
+  const outputs = isRecord(outputsEnvelope.outputs)
+    ? outputsEnvelope.outputs
+    : outputsEnvelope;
+  const tables = Array.isArray(outputs.tables) ? outputs.tables : [];
+  let typedRows: unknown[] | null = null;
+
+  for (const tableValue of tables) {
+    if (!isRecord(tableValue)) continue;
+    const data = isRecord(tableValue.data) ? tableValue.data : {};
+    const nestedTable = isRecord(data.table) ? data.table : {};
+    const candidates = [tableValue.rows, data.rows, nestedTable.rows];
+
+    for (const candidate of candidates) {
+      if (
+        Array.isArray(candidate)
+        && candidate.length
+        && candidate.some(
+          (row) => isRecord(row) && row.rank !== undefined && row.rank !== ""
+        )
+      ) {
+        typedRows = candidate;
+        break;
+      }
+    }
+
+    if (typedRows) break;
+  }
+
+  if (!typedRows) {
+    const queue: unknown[] = [response];
+    const visited = new WeakSet<object>();
+
+    while (queue.length) {
+      const value = queue.shift();
+      if (!isRecord(value) || visited.has(value)) continue;
+      visited.add(value);
+
+      const candidates = [
+        value.rows,
+        isRecord(value.data) ? value.data.rows : undefined,
+        isRecord(value.data) && isRecord(value.data.table)
+          ? value.data.table.rows
+          : undefined
+      ];
+
+      for (const candidate of candidates) {
+        if (
+          Array.isArray(candidate)
+          && candidate.some(
+            (row) => isRecord(row) && row.rank !== undefined && row.rank !== ""
+          )
+        ) {
+          typedRows = candidate.filter(
+            (row) => isRecord(row) && row.rank !== undefined && row.rank !== ""
+          );
+          break;
+        }
+      }
+
+      if (typedRows) break;
+
+      for (const child of Object.values(value)) {
+        if (isRecord(child)) queue.push(child);
+        if (Array.isArray(child)) queue.push(...child.filter(isRecord));
+      }
+    }
+  }
+
+  const array = explicitRows || typedRows || findArrayByKeys(response, [
         "ranking_table",
         "rankingTable",
         "ranking",
@@ -143,6 +217,9 @@ export function normalizeRankingRows(response: GeoQueryResponse): RankingRow[] |
         "score",
         "final_score",
         "rank_score",
+        "priority_score",
+        "investment_score",
+        "annual_rate_mm",
         "value"
       ],
       0
@@ -186,7 +263,7 @@ export function normalizeRankingRows(response: GeoQueryResponse): RankingRow[] |
         getValue(row, ["meanSlope", "mean_slope", "slope"], "—")
       ),
       area: String(
-        getValue(row, ["area", "area_m2", "parcel_area"], "—")
+        getValue(row, ["area", "_area", "area_m2", "parcel_area"], "—")
       ),
       recommendation: String(
         getValue(row, ["recommendation", "label", "class", "category"], "Candidate")

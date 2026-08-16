@@ -31,13 +31,13 @@ def score_real_estate_property(props: dict[str, Any]) -> tuple[float, dict[str, 
 
     score = 100.0
 
-    # نزدیکی به مترو/مرکز خرید؛ هرچه کمتر بهتر.
+    # Metro or shopping proximity; lower is better.
     if best_poi is None:
         score -= 20.0
     else:
         score -= min(best_poi, 1500.0) / 500.0 * 10.0
 
-    # نزدیکی به خیابان اصلی؛ هرچه کمتر بهتر.
+    # Main-road proximity; lower is better.
     if road is None:
         score -= 10.0
     else:
@@ -45,7 +45,7 @@ def score_real_estate_property(props: dict[str, Any]) -> tuple[float, dict[str, 
 
     score -= risk_penalty
 
-    # اگر خارج از محدوده مجاز باشد، جریمه سنگین می‌گیرد.
+    # Apply a strong penalty outside the buildable area.
     in_allowed_zone = props.get("in_allowed_zone")
     if in_allowed_zone is None:
         in_allowed_zone = props.get("build_zone_allowed")
@@ -55,12 +55,12 @@ def score_real_estate_property(props: dict[str, Any]) -> tuple[float, dict[str, 
     if in_allowed_zone is False:
         score -= 30.0
 
-    # قیمت را خیلی کم وارد می‌کنیم، چون در این query معیار اصلی مکانی/ریسک است.
+    # Price has a small weight because spatial and risk criteria dominate.
     if price is not None:
         score -= min(price / 10_000_000_000.0, 5.0) * 0.8
 
     kind = str(props.get("kind") or props.get("property_type") or "").lower()
-    if "villa" in kind or "ویلا" in kind:
+    if "villa" in kind:
         score += 1.0
 
     score = max(0.0, min(100.0, score))
@@ -104,19 +104,19 @@ def evaluate_real_estate_eligibility(
 
     reasons: list[str] = []
 
-    # شرط اصلی کاربر: کمتر از ۵۰۰ متر به مترو یا مرکز خرید
+    # Primary condition: within 500 meters of metro or shopping locations.
     if best_poi is None:
         reasons.append("distance_to_metro_or_mall_missing")
     elif best_poi > 500:
         reasons.append("farther_than_500m_from_metro_or_mall")
 
-    # نزدیکی به خیابان اصلی؛ برای MVP آستانه ۱۵۰ متر می‌گذاریم.
+    # Main-road proximity uses a 150-meter MVP threshold.
     if road is None:
         reasons.append("distance_to_main_road_missing")
     elif road > 150:
         reasons.append("far_from_main_road")
 
-    # برای MVP فقط high را حذف می‌کنیم و medium را با جریمه امتیازی نگه می‌داریم.
+    # Exclude only high risk in the MVP; retain medium risk with a score penalty.
     if flood == "high":
         reasons.append("high_flood_risk")
     if earthquake == "high":

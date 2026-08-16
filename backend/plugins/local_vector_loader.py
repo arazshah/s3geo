@@ -444,21 +444,6 @@ def _load_with_geopandas(
         "feature collection",
 
         # Persian keywords
-        "بردار",
-        "وکتور",
-        "لایه برداری",
-        "داده برداری",
-        "فایل برداری",
-        "ژئوجیسون",
-        "جئوجیسون",
-        "شیپ فایل",
-        "شیپ‌فایل",
-        "ژئوپکیج",
-        "بارگذاری بردار",
-        "خواندن بردار",
-        "باز کردن بردار",
-        "عارضه",
-        "عوارض",
     ],
     description=(
         "Load a local vector file such as GeoJSON, Shapefile or GeoPackage, "

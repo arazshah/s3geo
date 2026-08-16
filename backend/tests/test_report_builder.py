@@ -109,6 +109,22 @@ def test_build_report_table_has_correct_rows():
     assert table["rows"][1]["rank"] == 2
 
 
+def test_build_report_default_spec_uses_requested_score_field_and_id():
+    report = build_report(
+        _ranked_features(),
+        score_field="investment_score",
+        rank_field="rank",
+    )
+
+    assert [column["field"] for column in report.table["columns"]] == [
+        "rank",
+        "id",
+        "name",
+        "investment_score",
+    ]
+    assert report.table["rows"][0]["id"] == "p1"
+
+
 def test_build_report_table_format_values():
     spec = ReportSpec(
         title="تست",

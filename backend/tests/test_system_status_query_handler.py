@@ -53,7 +53,7 @@ class FakeContext:
 
 
 def test_is_system_status_query_matches_text_tokens() -> None:
-    assert is_system_status_query("وضعیت سیستم را بگو") is True
+    assert is_system_status_query("show system status") is True
     assert is_system_status_query("health") is True
     assert is_system_status_query("system status") is True
 
@@ -90,7 +90,7 @@ def test_try_handle_system_status_query_builds_response_and_remembers() -> None:
 
     result = try_handle_system_status_query(
         context,
-        query="وضعیت سیستم را بگو",
+        query="show system status",
         inputs={"x": 1},
         final_request_id="req-status-1",
         final_metadata={"source": "test"},
