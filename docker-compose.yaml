@@ -25,7 +25,7 @@ services:
       context: .
       dockerfile: deploy/frontend.Dockerfile
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.s3geo.com}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.geochat.ir}
         VITE_API_RUN_PATH: ${VITE_API_RUN_PATH:-/api/v1/query}
         VITE_API_PREVIEW_PATH: ${VITE_API_PREVIEW_PATH:-/api/v1/planner/intent}
     restart: unless-stopped

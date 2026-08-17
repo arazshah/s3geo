@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.testclient import TestClient
 
 import api.main
-from api.main import create_app
+from api.main import APIConfig, create_app
 
 
 _REQUIRED_FRONTEND_PATHS = {
@@ -78,3 +78,10 @@ def test_uvicorn_entrypoint_app_registers_full_frontend_api_surface() -> None:
     assert len(paths) >= 60
     assert _REQUIRED_FRONTEND_PATHS <= paths
     assert _REQUIRED_V1_FRONTEND_PATHS <= paths
+
+
+def test_production_frontend_origins_are_allowed_by_default() -> None:
+    origins = set(APIConfig().allow_origins)
+
+    assert "https://geochat.ir" in origins
+    assert "https://www.geochat.ir" in origins
