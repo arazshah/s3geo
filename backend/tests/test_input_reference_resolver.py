@@ -88,6 +88,24 @@ def test_resolver_uses_json_fallback_for_json_raster(tmp_path: Path) -> None:
     assert resolved["raster"]["metadata"]["crs"] == "EPSG:3857"
 
 
+def test_resolver_hydrates_zones_role_from_vector_upload(tmp_path: Path) -> None:
+    storage = UploadStorage(
+        UploadStorageConfig(root_dir=tmp_path / "uploads")
+    )
+    upload = storage.save_upload(
+        filename="zones.geojson",
+        content=json.dumps(SAMPLE_VECTOR).encode("utf-8"),
+        content_type="application/geo+json",
+        kind="vector",
+    )
+
+    resolved = UploadReferenceResolver(storage).resolve_inputs(
+        {"zones": upload["upload_id"]}
+    )
+
+    assert resolved["zones"] == SAMPLE_VECTOR
+
+
 def test_resolver_uses_raster_loader_plugin_for_tiff(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

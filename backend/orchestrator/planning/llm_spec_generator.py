@@ -841,6 +841,38 @@ def _pre_normalize_query_spec_json(data: dict[str, Any], *, context: dict[str, A
             op_copy = _repair_vector_input_aliases(op_copy)
             op_copy = _repair_filter_attribute_params(op_copy)
 
+            # A selected mixed dataset pair is already resolved by the API to
+            # one canonical raster and one canonical vector. Repair omitted
+            # zonal-statistics roles only in that unambiguous case; never pick
+            # among multiple datasets or override an explicit LLM binding.
+            if str(op_copy.get("op") or "") == "zonal_statistics":
+                available_inputs = {
+                    str(item)
+                    for item in (context or {}).get("available_inputs", [])
+                    if isinstance(item, str)
+                }
+                inputs = dict(op_copy.get("inputs") or {})
+                repairs: list[str] = []
+
+                if "raster" not in inputs and "raster" in available_inputs:
+                    inputs["raster"] = "raster"
+                    repairs.append("bound zonal_statistics.raster to canonical raster input")
+
+                if "zones" not in inputs:
+                    if "zones" in available_inputs:
+                        inputs["zones"] = "zones"
+                        repairs.append("bound zonal_statistics.zones to explicit zones input")
+                    elif "vector" in available_inputs:
+                        inputs["zones"] = "vector"
+                        repairs.append("bound zonal_statistics.zones to canonical vector input")
+
+                if repairs:
+                    op_copy["inputs"] = inputs
+                    metadata = dict(normalized.get("metadata") or {})
+                    existing = list(metadata.get("pre_normalization_repairs") or [])
+                    metadata["pre_normalization_repairs"] = existing + repairs
+                    normalized["metadata"] = metadata
+
             new_operations.append(op_copy)
 
         normalized["operations"] = new_operations

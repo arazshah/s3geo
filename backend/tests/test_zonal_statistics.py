@@ -17,6 +17,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from geochat_sdk.types.vector import VectorOut  # noqa: E402
+from geochat_sdk.types.raster import RasterOut  # noqa: E402
 
 from plugins.zonal_statistics import (  # noqa: E402
     DEFAULT_STATS,
@@ -358,6 +359,45 @@ def test_calculate_zonal_statistics_center_zone() -> None:
     assert md["empty_zone_count"] == 0
     assert md["total_selected_pixel_count"] == 9
     assert md["total_valid_pixel_count"] == 9
+
+
+def test_calculate_zonal_statistics_reads_file_backed_geotiff_window(tmp_path: Path) -> None:
+    np = pytest.importorskip("numpy")
+    rasterio = pytest.importorskip("rasterio")
+    from rasterio.transform import from_origin
+
+    raster_path = tmp_path / "dem.tif"
+    data = np.arange(1, 10, dtype="int16").reshape(3, 3)
+    with rasterio.open(
+        raster_path,
+        "w",
+        driver="GTiff",
+        width=3,
+        height=3,
+        count=1,
+        dtype="int16",
+        crs="EPSG:4326",
+        transform=from_origin(0, 3, 1, 1),
+        nodata=-9999,
+    ) as dst:
+        dst.write(data, 1)
+
+    result = calculate_zonal_statistics(
+        raster=RasterOut(path=str(raster_path), metadata={}),
+        zones=[ZONE_FULL_3X3],
+        stats=["count", "valid_count", "min", "max", "mean", "median"],
+        band_index=1,
+        zone_id_field="id",
+    )
+
+    props = result.features[0]["properties"]
+    assert props["zonal_count"] == 9
+    assert props["zonal_valid_count"] == 9
+    assert props["zonal_min"] == 1.0
+    assert props["zonal_max"] == 9.0
+    assert props["zonal_mean"] == 5.0
+    assert props["zonal_median"] == 5.0
+    assert result.metadata["file_backed"] is True
 
 
 def test_calculate_zonal_statistics_with_nodata() -> None:

@@ -1,4 +1,4 @@
-"""Narrow public-query normalization for deterministic vector display."""
+"""Public query normalization for selected vector and raster datasets."""
 
 from __future__ import annotations
 
@@ -43,11 +43,11 @@ def normalize_query_inputs(
     datasets: list[str] | None,
     upload_storage: UploadStorage | None,
 ) -> NormalizedQueryInputs:
-    """Normalize public selected-dataset fields for simple vector display only.
+    """Normalize public selected-dataset fields into canonical input references.
 
     ``inputs.vector_ref`` remains the authoritative legacy binding. The public
-    selection fields are intentionally interpreted here once, before service
-    dispatch, rather than in individual execution paths.
+    selection fields are interpreted here once, before service dispatch,
+    rather than independently in each execution path.
     """
     normalized_inputs = dict(inputs)
     selected_ids = _unique_dataset_ids(data_source_ids, dataset_ids, datasets)
@@ -61,32 +61,57 @@ def normalize_query_inputs(
     }
 
     if not is_display:
-        # QuerySpec analysis also needs a canonical vector input when the UI
-        # supplies exactly one selected GeoJSON dataset.  Previously selected
-        # IDs were preserved only as metadata for non-display requests, leaving
-        # the planner with no runtime input for references such as
-        # ``$inputs.uploaded_geojson``.
-        if (
-            len(selected_ids) == 1
-            and not normalized_inputs.get("vector_ref")
-            and not normalized_inputs.get("vector")
-            and upload_storage is not None
-        ):
-            try:
-                upload_metadata = upload_storage.read_metadata(selected_ids[0])
-            except UploadStorageError:
-                upload_metadata = None
+        # QuerySpec analysis needs canonical inputs for every unambiguous
+        # selected dataset kind.  The AI workspace sends selected upload IDs,
+        # not legacy vector_ref/raster_ref fields.  Resolve one vector and one
+        # raster deterministically so mixed workflows can bind roles such as
+        # zonal_statistics(raster, zones).
+        selected_by_kind: dict[str, list[str]] = {"vector": [], "raster": []}
+        if upload_storage is not None:
+            for selected_id in selected_ids:
+                try:
+                    upload_metadata = upload_storage.read_metadata(selected_id)
+                except UploadStorageError:
+                    continue
 
-            if isinstance(upload_metadata, dict) and upload_metadata.get("kind") == "vector":
-                normalized_inputs["vector_ref"] = selected_ids[0]
-                metadata.update(
-                    {
-                        "request_shape": "selected_dataset_vector_context",
-                        "bound_vector_ref": selected_ids[0],
-                        "binding_precedence": "selected_dataset_id",
-                        "normalized_dataset_selection": True,
-                    }
-                )
+                kind = str(upload_metadata.get("kind") or "").strip().lower()
+                if kind in selected_by_kind:
+                    selected_by_kind[kind].append(selected_id)
+
+        bound_roles: dict[str, str] = {}
+        for kind in ("vector", "raster"):
+            selected_for_kind = selected_by_kind[kind]
+            if len(selected_for_kind) != 1:
+                continue
+
+            ref_key = f"{kind}_ref"
+            if normalized_inputs.get(ref_key) or normalized_inputs.get(kind):
+                continue
+
+            normalized_inputs[ref_key] = selected_for_kind[0]
+            bound_roles[kind] = selected_for_kind[0]
+
+        if bound_roles:
+            metadata.update(
+                {
+                    "request_shape": (
+                        "selected_dataset_mixed_context"
+                        if set(bound_roles) == {"vector", "raster"}
+                        else "selected_dataset_analysis_context"
+                    ),
+                    "bound_dataset_refs": bound_roles,
+                    "binding_precedence": (
+                        "selected_dataset_kind"
+                        if len(bound_roles) > 1
+                        else "selected_dataset_id"
+                    ),
+                    "normalized_dataset_selection": True,
+                }
+            )
+            if "vector" in bound_roles:
+                metadata["bound_vector_ref"] = bound_roles["vector"]
+            if "raster" in bound_roles:
+                metadata["bound_raster_ref"] = bound_roles["raster"]
         return NormalizedQueryInputs(inputs=normalized_inputs, metadata=metadata)
 
     if isinstance(explicit_vector_ref, str) and explicit_vector_ref.strip():

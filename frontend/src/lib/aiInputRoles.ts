@@ -6,6 +6,8 @@ export type AiInputRole =
   | "constraint"
   | "boundary"
   | "raster"
+  | "vector"
+  | "zones"
   | "mask"
   | "weight"
   | "context";
@@ -76,6 +78,25 @@ function isProximityQuery(query: string, inferredIntent?: string, detectedCriter
     normalizedCriteria.includes("proximity") ||
     normalizedCriteria.includes("nearest") ||
     normalizedCriteria.includes("distance");
+}
+
+function isZonalStatisticsQuery(query: string) {
+  const normalized = normalizeText(query);
+
+  return normalized.includes("zonal statistics") ||
+    normalized.includes("zonal elevation") ||
+    (normalized.includes("zone") &&
+      normalized.includes("raster") &&
+      normalized.includes("statistic"));
+}
+
+function inferDatasetKind(dataset: AiRoleDataset): "raster" | "vector" | null {
+  const title = String(dataset.title || "").toLowerCase().split(/[?#]/, 1)[0];
+
+  if (/\.(tif|tiff)$/.test(title)) return "raster";
+  if (/\.(geojson|json|gpkg|shp|kml|zip)$/.test(title)) return "vector";
+
+  return null;
 }
 
 function inferSourceTarget(datasets: AiRoleDataset[]): {
@@ -194,15 +215,53 @@ export function buildAiInputRoleBindings({
   );
 
   const warnings: string[] = [];
+  const zonalStatistics = isZonalStatisticsQuery(query);
   const proximity = isProximityQuery(query, inferredIntent, detectedCriteria);
-  const operation = proximity ? "spatial_nearest" : null;
+  const operation = zonalStatistics
+    ? "zonal_statistics"
+    : proximity
+      ? "spatial_nearest"
+      : null;
 
   const roleById = new Map<string, AiInputRole>();
   const inputs: Record<string, string> = {};
   const inputRoles: Record<string, string> = {};
   const frontendInputRoles: Record<string, { id: string; title: string }> = {};
 
-  if (proximity && uniqueDatasets.length >= 2) {
+  if (zonalStatistics) {
+    const rasterDatasets = uniqueDatasets.filter(
+      (dataset) => inferDatasetKind(dataset) === "raster"
+    );
+    const vectorDatasets = uniqueDatasets.filter(
+      (dataset) => inferDatasetKind(dataset) === "vector"
+    );
+
+    if (rasterDatasets.length === 1 && vectorDatasets.length === 1) {
+      const raster = rasterDatasets[0];
+      const zones = vectorDatasets[0];
+
+      roleById.set(raster.id, "raster");
+      roleById.set(zones.id, "zones");
+
+      inputs.raster = raster.id;
+      inputs.zones = zones.id;
+      inputRoles.raster = raster.id;
+      inputRoles.zones = zones.id;
+
+      frontendInputRoles.raster = {
+        id: raster.id,
+        title: raster.title || raster.id
+      };
+      frontendInputRoles.zones = {
+        id: zones.id,
+        title: zones.title || zones.id
+      };
+    } else {
+      warnings.push(
+        "Zonal statistics requires exactly one selected raster and one selected vector zones dataset."
+      );
+    }
+  } else if (proximity && uniqueDatasets.length >= 2) {
     const { source, target } = inferSourceTarget(uniqueDatasets);
 
     if (source?.id && target?.id) {
@@ -252,9 +311,11 @@ export function buildAiInputRoleBindings({
     metadata: {
       frontend_operation: operation,
       frontend_input_roles: frontendInputRoles,
-      frontend_role_binding_strategy: proximity
-        ? "heuristic_proximity_source_target"
-        : "default_context_roles",
+      frontend_role_binding_strategy: zonalStatistics
+        ? "deterministic_zonal_raster_zones"
+        : proximity
+          ? "heuristic_proximity_source_target"
+          : "default_context_roles",
       frontend_role_binding_warnings: warnings
     },
     warnings
