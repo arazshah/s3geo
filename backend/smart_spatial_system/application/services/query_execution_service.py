@@ -27,6 +27,7 @@ Main responsibilities:
 from __future__ import annotations
 
 import os
+import re
 
 import uuid
 from dataclasses import asdict, dataclass, field, is_dataclass
@@ -656,8 +657,25 @@ class QueryExecutionService:
             structured_error["code"] = "planning.missing_input_roles"
             structured_error["category"] = "planning_error"
             structured_error["message"] = message
-            details.setdefault("operation", "spatial_nearest")
-            details.setdefault("missing_roles", ["source", "target"])
+            operation_match = re.search(
+                r"Operation\s+['\"]([^'\"]+)['\"]",
+                message,
+                flags=re.IGNORECASE,
+            )
+            roles_match = re.search(
+                r"missing input role(?:\(s\))?\s*:\s*\[([^\]]*)\]",
+                message,
+                flags=re.IGNORECASE,
+            )
+            missing_roles = (
+                re.findall(r"['\"]([^'\"]+)['\"]", roles_match.group(1))
+                if roles_match
+                else []
+            )
+            if operation_match:
+                details["operation"] = operation_match.group(1)
+            if missing_roles:
+                details["missing_roles"] = missing_roles
 
         structured_error.setdefault("code", "planning.failed")
         structured_error.setdefault("category", "planning_error")
@@ -696,9 +714,8 @@ class QueryExecutionService:
             ],
             "errors": [structured_error],
             "next_actions": [
-                "Specify the input dataset roles.",
-                "Nearest and proximity operations require source and target roles.",
-                "Review the selected inputs and metadata.",
+                "Specify the input dataset roles named in the error.",
+                "Review the selected inputs and role-binding metadata.",
             ],
             "metadata": final_metadata,
             "confidence": {

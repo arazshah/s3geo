@@ -49,6 +49,10 @@ class QueryRequest(BaseModel):
         default_factory=dict,
         description="Optional user/session context.",
     )
+    context: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Frontend dataset and input-role context.",
+    )
     metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Optional request metadata.",
@@ -371,13 +375,29 @@ def query_endpoint(
             detail="'band_map' must be an object when provided.",
         )
 
-    user_context = body_payload.get("user_context") or {}
+    frontend_context = body_payload.get("context") or {}
 
-    if not isinstance(user_context, dict):
+    if not isinstance(frontend_context, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="'context' must be an object when provided.",
+        )
+
+    explicit_user_context = body_payload.get("user_context") or {}
+
+    if not isinstance(explicit_user_context, dict):
         raise HTTPException(
             status_code=400,
             detail="'user_context' must be an object when provided.",
         )
+
+    # The AI Query Workspace uses `context`; older callers use
+    # `user_context`. Preserve both contracts with explicit user_context taking
+    # precedence on collisions.
+    user_context = {
+        **frontend_context,
+        **explicit_user_context,
+    }
 
     metadata = body_payload.get("metadata") or {}
 

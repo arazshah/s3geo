@@ -3,6 +3,7 @@ from orchestrator.planning.llm_query_spec import (
     query_spec_from_dict as strict_query_spec_from_dict,
 )
 from orchestrator.planning.llm_spec_generator import (
+    _pre_normalize_query_spec_json,
     normalize_llm_query_spec_for_planning,
     query_spec_from_dict as generator_query_spec_from_dict,
 )
@@ -138,6 +139,36 @@ def test_llm_spec_generator_preserves_raster_chain_through_normalization_and_pla
     }
 
     assert plan.output_nodes == ["vegetation_polygons"]
+
+
+def test_pre_normalizer_binds_missing_zonal_roles_from_canonical_mixed_inputs() -> None:
+    data = {
+        "goal": "calculate_zonal_elevation_statistics",
+        "operations": [
+            {
+                "op": "zonal_statistics",
+                "inputs": {},
+                "params": {"band": 1, "zone_id_field": "id"},
+                "output": "zone_stats",
+            }
+        ],
+        "outputs": [],
+        "metadata": {},
+    }
+
+    normalized = _pre_normalize_query_spec_json(
+        data,
+        context={"available_inputs": ["raster", "vector"]},
+    )
+
+    assert normalized["operations"][0]["inputs"] == {
+        "raster": "raster",
+        "zones": "vector",
+    }
+    assert normalized["metadata"]["pre_normalization_repairs"] == [
+        "bound zonal_statistics.raster to canonical raster input",
+        "bound zonal_statistics.zones to canonical vector input",
+    ]
 
 
 def test_llm_spec_generator_removes_unsupported_raster_input_roles_but_keeps_supported_roles() -> None:

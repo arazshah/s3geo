@@ -9,6 +9,9 @@ from smart_spatial_system.application.services.query_execution.planning_executio
     _add_filename_based_runtime_input_aliases,
     _add_single_vector_query_ref_aliases,
 )
+from smart_spatial_system.application.services.query_execution.planning_context import (
+    _normalize_input_roles,
+)
 
 
 def _storage(tmp_path: Path) -> UploadStorage:
@@ -35,6 +38,57 @@ def test_selected_vector_is_bound_for_non_display_analysis(tmp_path: Path) -> No
 
     assert normalized.inputs["vector_ref"] == upload["upload_id"]
     assert normalized.metadata["binding_precedence"] == "selected_dataset_id"
+
+
+def test_selected_mixed_pair_is_bound_by_dataset_kind(tmp_path: Path) -> None:
+    storage = _storage(tmp_path)
+    raster = storage.save_upload(
+        filename="dem.tif",
+        content=b"valid-enough-for-upload-contract",
+        content_type="image/tiff",
+        kind="raster",
+    )
+    vector = storage.save_upload(
+        filename="zones.geojson",
+        content=b'{"type":"FeatureCollection","features":[]}',
+        content_type="application/geo+json",
+        kind="vector",
+    )
+
+    normalized = normalize_query_inputs(
+        query="Calculate zonal statistics for the zones using the DEM.",
+        inputs={},
+        data_source_ids=[raster["upload_id"], vector["upload_id"]],
+        dataset_ids=None,
+        datasets=None,
+        upload_storage=storage,
+    )
+
+    assert normalized.inputs == {
+        "vector_ref": vector["upload_id"],
+        "raster_ref": raster["upload_id"],
+    }
+    assert normalized.metadata["request_shape"] == "selected_dataset_mixed_context"
+    assert normalized.metadata["bound_dataset_refs"] == {
+        "vector": vector["upload_id"],
+        "raster": raster["upload_id"],
+    }
+
+
+def test_planning_context_preserves_raster_and_zones_roles() -> None:
+    roles = _normalize_input_roles(
+        resolved_inputs={},
+        user_context={
+            "input_roles": {
+                "raster": "upl-raster",
+                "zones": "upl-zones",
+            }
+        },
+        metadata=None,
+    )
+
+    assert roles["raster"]["data_source_id"] == "upl-raster"
+    assert roles["zones"]["data_source_id"] == "upl-zones"
 
 
 def test_single_vector_runtime_has_uploaded_geojson_compatibility_alias() -> None:

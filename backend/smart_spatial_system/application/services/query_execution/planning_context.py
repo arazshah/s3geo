@@ -4,6 +4,24 @@ from collections.abc import Callable
 from typing import Any
 
 
+_SUPPORTED_INPUT_ROLES = {
+    "source",
+    "target",
+    "candidate",
+    "reference",
+    "constraint",
+    "boundary",
+    "raster",
+    "vector",
+    "zones",
+    "mask",
+    "polygon",
+    "weight",
+    "left",
+    "right",
+}
+
+
 def _as_mapping(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
@@ -114,12 +132,12 @@ def _normalize_input_roles(
     metadata: dict[str, Any] | None,
 ) -> dict[str, dict[str, Any]]:
     """
-    Resolve source/target role bindings for nearest/proximity operations.
+    Resolve explicit dataset role bindings for spatial operations.
 
     Reads all supported frontend/backend contract locations:
-      - inputs.source / inputs.target                -> resolved_inputs
-      - context.input_roles.source / target          -> user_context
-      - context.role_bindings.source / target        -> user_context
+      - inputs.<role>                                 -> resolved_inputs
+      - context.input_roles.<role>                    -> user_context
+      - context.role_bindings.<role>                  -> user_context
       - context.data_sources[].role/input_role       -> user_context
       - metadata.input_roles / metadata.role_bindings
     """
@@ -130,7 +148,8 @@ def _normalize_input_roles(
     roles: dict[str, dict[str, Any]] = {}
 
     def set_role(role: str, value: Any, *, extra: dict[str, Any] | None = None) -> None:
-        if role not in {"source", "target"}:
+        role = str(role or "").strip().lower()
+        if role not in _SUPPORTED_INPUT_ROLES:
             return
 
         ref = _coerce_data_source_ref(value)
@@ -143,26 +162,26 @@ def _normalize_input_roles(
             merged["input_role"] = role
             roles[role] = merged
 
-    # 1) Direct inputs.source / inputs.target.
-    set_role("source", resolved_inputs.get("source"))
-    set_role("target", resolved_inputs.get("target"))
+    # 1) Direct role-keyed inputs.
+    for role in _SUPPORTED_INPUT_ROLES:
+        set_role(role, resolved_inputs.get(role))
 
     # 2) context.input_roles / metadata.input_roles.
     for container in (context, meta):
         input_roles = _as_mapping(container.get("input_roles"))
-        set_role("source", input_roles.get("source"))
-        set_role("target", input_roles.get("target"))
+        for role, value in input_roles.items():
+            set_role(str(role), value)
 
     # 3) context.role_bindings / metadata.role_bindings.
     for container in (context, meta):
         role_bindings = _as_mapping(container.get("role_bindings"))
-        set_role("source", role_bindings.get("source"))
-        set_role("target", role_bindings.get("target"))
+        for role, value in role_bindings.items():
+            set_role(str(role), value)
 
     # 4) context.data_sources[].role/input_role.
     for ds in _collect_context_data_sources(user_context=user_context, metadata=metadata):
         role = str(ds.get("input_role") or ds.get("role") or "").strip().lower()
-        if role in {"source", "target"}:
+        if role in _SUPPORTED_INPUT_ROLES:
             set_role(role, ds, extra=ds)
 
     return roles
@@ -270,6 +289,28 @@ def build_query_spec_planning_context(
                         "k": 1,
                     },
                     "output": "nearest_results",
+                },
+            },
+            "zonal_statistics": {
+                "contract": "zonal_statistics.raster_vector.v1",
+                "required_inputs": ["raster", "zones"],
+                "rules": [
+                    "Bind raster to the selected raster dataset.",
+                    "Bind zones to the selected vector polygon dataset.",
+                    "Use input role names exactly: raster and zones.",
+                    "Do not substitute NDVI or vegetation extraction for elevation zonal statistics.",
+                ],
+                "valid_example": {
+                    "op": "zonal_statistics",
+                    "inputs": {
+                        "raster": "raster",
+                        "zones": "zones",
+                    },
+                    "params": {
+                        "band_index": 1,
+                        "zone_id_field": "id",
+                    },
+                    "output": "zonal_statistics_result",
                 },
             },
         },

@@ -29,7 +29,7 @@ def test_is_llm_planning_enabled_non_truthy_values(monkeypatch, value: str) -> N
 
 
 def test_apply_intent_to_query_returns_original_query_without_intent() -> None:
-    query = "نمایش پوشش گیاهی"
+    query = "Display vegetation coverage"
 
     assert apply_intent_to_query(query, None) == query
     assert apply_intent_to_query(query, {}) == query
@@ -37,7 +37,7 @@ def test_apply_intent_to_query_returns_original_query_without_intent() -> None:
 
 def test_apply_intent_to_query_rewrites_vegetation_extraction() -> None:
     result = apply_intent_to_query(
-        "پوشش گیاهی را استخراج کن",
+        "Extract vegetation coverage",
         {
             "intent_name": "vegetation_extraction",
             "parameters": {
@@ -49,8 +49,8 @@ def test_apply_intent_to_query_rewrites_vegetation_extraction() -> None:
 
     assert "NDVI vegetation extraction." in result
     assert "greater than 0.42." in result
-    assert "polygon vectorize" in result
-    assert "original_query: پوشش گیاهی را استخراج کن" in result
+    assert "extract and vectorize polygons." in result
+    assert "original_query: Extract vegetation coverage" in result
 
 
 def test_apply_intent_to_query_does_not_force_raster_for_vector_only_intent() -> None:
@@ -68,9 +68,41 @@ def test_apply_intent_to_query_does_not_force_raster_for_vector_only_intent() ->
     assert result == query
 
 
+def test_apply_intent_to_query_does_not_rewrite_zero_confidence_intent() -> None:
+    query = "Calculate elevation zonal statistics. Do not use NDVI."
+
+    result = apply_intent_to_query(
+        query,
+        {
+            "intent_name": "vegetation_extraction",
+            "confidence": 0,
+            "required_inputs": {"raster": True, "vector": True},
+            "parameters": {"threshold": 0.3, "vectorize": True},
+        },
+    )
+
+    assert result == query
+
+
+def test_apply_intent_to_query_respects_explicit_ndvi_exclusion() -> None:
+    query = "Calculate elevation zonal statistics. Do not use NDVI."
+
+    result = apply_intent_to_query(
+        query,
+        {
+            "intent_name": "vegetation_extraction",
+            "confidence": 0.8,
+            "required_inputs": {"raster": True, "vector": True},
+            "parameters": {"threshold": 0.3, "vectorize": True},
+        },
+    )
+
+    assert result == query
+
+
 def test_apply_intent_to_query_uses_default_threshold_on_invalid_value() -> None:
     result = apply_intent_to_query(
-        "پوشش گیاهی را استخراج کن",
+        "Extract vegetation coverage",
         {
             "intent_name": "vegetation_extraction",
             "parameters": {
@@ -84,14 +116,14 @@ def test_apply_intent_to_query_uses_default_threshold_on_invalid_value() -> None
 
 def test_apply_intent_to_query_rewrites_raster_vectorization() -> None:
     result = apply_intent_to_query(
-        "پلیگون بساز",
+        "Create polygons",
         {
             "intent_name": "raster_vectorization",
         },
     )
 
-    assert result.startswith("NDVI raster_to_vector polygon استخراج کن.")
-    assert "original_query: پلیگون بساز" in result
+    assert result.startswith("Extract NDVI polygons with raster_to_vector.")
+    assert "original_query: Create polygons" in result
 
 
 def test_plan_intent_with_llm_delegates_to_orchestrator_planner(monkeypatch) -> None:

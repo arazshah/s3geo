@@ -40,6 +40,7 @@ import math
 from collections import Counter
 from copy import deepcopy
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from geochat_sdk.decorators import capability
@@ -578,6 +579,73 @@ def _collect_zone_values(
     return values
 
 
+def _raster_path_and_metadata(
+    raster: Any,
+) -> tuple[Path | None, dict[str, Any]]:
+    """Return a readable file-backed raster without materializing all pixels."""
+    path_value: Any = None
+    metadata: Any = {}
+
+    if not isinstance(raster, dict):
+        path_value = getattr(raster, "path", None)
+        metadata = getattr(raster, "metadata", {}) or {}
+    else:
+        path_value = raster.get("path")
+        metadata = raster.get("metadata", {}) or {}
+
+    if not isinstance(metadata, dict):
+        raise ValueError("raster metadata must be a dict.")
+
+    if not isinstance(path_value, str) or not path_value.strip():
+        return None, dict(metadata)
+
+    path = Path(path_value).expanduser().resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"Raster file not found: {path}")
+
+    return path, dict(metadata)
+
+
+def _collect_zone_values_from_raster_file(
+    *,
+    raster_path: Path,
+    zone_geometry: dict[str, Any] | None,
+    band_index: int,
+    all_touched: bool,
+) -> list[Any]:
+    """Read only the raster window intersecting one zone using rasterio."""
+    if zone_geometry is None or _geometry_bbox(zone_geometry) is None:
+        return []
+
+    try:
+        import rasterio
+        from rasterio.errors import WindowError
+        from rasterio.features import geometry_mask, geometry_window
+    except ImportError as exc:
+        raise RuntimeError(
+            "File-backed zonal statistics requires rasterio."
+        ) from exc
+
+    try:
+        with rasterio.open(str(raster_path)) as src:
+            try:
+                window = geometry_window(src, [zone_geometry])
+            except WindowError:
+                return []
+
+            values = src.read(band_index, window=window, masked=False)
+            inside = geometry_mask(
+                [zone_geometry],
+                out_shape=values.shape,
+                transform=src.window_transform(window),
+                invert=True,
+                all_touched=all_touched,
+            )
+            return values[inside].tolist()
+    except WindowError:
+        return []
+
+
 def _make_output_feature(
     *,
     zone: dict[str, Any],
@@ -763,10 +831,40 @@ def calculate_zonal_statistics(
         str(pick_first(engine, config.get("default_engine"), default="python"))
     )
 
-    data, raster_metadata, raster_info = _extract_raster(raster)
-    source_transform = _get_transform_from_metadata(raster_metadata, transform=transform)
+    raster_path, file_metadata = _raster_path_and_metadata(raster)
+    if raster_path is not None and not hasattr(raster, "data"):
+        try:
+            import rasterio
+        except ImportError as exc:
+            raise RuntimeError(
+                "File-backed zonal statistics requires rasterio."
+            ) from exc
 
-    band_count, raster_height, raster_width = _array_shape(data)
+        with rasterio.open(str(raster_path)) as src:
+            raster_metadata = {
+                **file_metadata,
+                "path": str(raster_path),
+                "width": int(src.width),
+                "height": int(src.height),
+                "band_count": int(src.count),
+                "nodata": src.nodata,
+                "crs": src.crs.to_string() if src.crs else None,
+                "transform": list(src.transform)[:6],
+            }
+            band_count = int(src.count)
+            raster_height = int(src.height)
+            raster_width = int(src.width)
+        data = None
+        raster_info = {
+            "input_type": type(raster).__name__,
+            "file_backed": True,
+            "path": str(raster_path),
+        }
+    else:
+        data, raster_metadata, raster_info = _extract_raster(raster)
+        band_count, raster_height, raster_width = _array_shape(data)
+
+    source_transform = _get_transform_from_metadata(raster_metadata, transform=transform)
 
     final_band_index = _validate_band_index(
         pick_first(band_index, config.get("default_band_index"), default=1),
@@ -818,13 +916,21 @@ def calculate_zonal_statistics(
         else:
             zone_id = zone_props.get("id", zone_index)
 
-        values = _collect_zone_values(
-            data=data,
-            transform=source_transform,
-            zone_geometry=zone.get("geometry"),
-            band_index=final_band_index,
-            all_touched=final_all_touched,
-        )
+        if raster_path is not None and data is None:
+            values = _collect_zone_values_from_raster_file(
+                raster_path=raster_path,
+                zone_geometry=zone.get("geometry"),
+                band_index=final_band_index,
+                all_touched=final_all_touched,
+            )
+        else:
+            values = _collect_zone_values(
+                data=data,
+                transform=source_transform,
+                zone_geometry=zone.get("geometry"),
+                band_index=final_band_index,
+                all_touched=final_all_touched,
+            )
 
         zone_stats = _calculate_zone_stats(
             values,
